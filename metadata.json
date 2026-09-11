@@ -1,0 +1,6 @@
+{
+  "name": "Reaction",
+  "description": "Performance-training app for reaction speed, decision timing, and competitive reflex drills.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

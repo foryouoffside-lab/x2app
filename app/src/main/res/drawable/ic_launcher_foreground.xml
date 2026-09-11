@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Lightning reflex bolt centered in 66dp safe zone (21 to 87) -->
+    <path
+        android:fillColor="#C7FF3D"
+        android:pathData="M57,26 L36,54 L52,54 L45,82 L72,50 L56,50 Z" />
+    <!-- Dynamic speed accents -->
+    <path
+        android:fillColor="#62A8FF"
+        android:pathData="M31,38 L37,38 L34,44 L28,44 Z" />
+    <path
+        android:fillColor="#62A8FF"
+        android:pathData="M69,64 L75,64 L72,70 L66,70 Z" />
+</vector>
