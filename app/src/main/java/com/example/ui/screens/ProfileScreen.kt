@@ -21,8 +21,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DisplaySettings
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -53,12 +57,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.UserProfile
 import com.example.ui.theme.BorderSubtle
+import com.example.ui.theme.BrandAccent
 import com.example.ui.theme.CharcoalCard
 import com.example.ui.theme.CharcoalCardElevated
 import com.example.ui.theme.CoolBlue
 import com.example.ui.theme.CoralWarning
 import com.example.ui.theme.DarkBackground
-import com.example.ui.theme.ElectricLime
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSubtle
@@ -111,12 +115,12 @@ fun ProfileScreen(
                         modifier = Modifier
                             .size(54.dp)
                             .background(CharcoalCardElevated, CircleShape)
-                            .border(1.5.dp, ElectricLime, CircleShape),
+                            .border(1.5.dp, BrandAccent, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "AM",
-                            color = ElectricLime,
+                            color = BrandAccent,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -146,7 +150,9 @@ fun ProfileScreen(
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.height(34.dp)
                 ) {
-                    Text(text = "Edit profile", fontSize = 11.sp, color = TextPrimary)
+                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "Edit", fontSize = 11.sp, color = TextPrimary)
                 }
             }
         }
@@ -166,19 +172,31 @@ fun ProfileScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "RPI", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "RPI", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(text = "${userProfile.rpi}", color = ElectricLime, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text(text = "${userProfile.rpi}", color = BrandAccent, fontSize = 22.sp, fontWeight = FontWeight.Black)
                 }
                 Box(modifier = Modifier.width(1.dp).height(32.dp).background(BorderSubtle))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "GLOBAL RANK", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "GLOBAL", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(text = userProfile.rankLabel, color = CoolBlue, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Box(modifier = Modifier.width(1.dp).height(32.dp).background(BorderSubtle))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "MEMBER", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.CalendarMonth, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "MEMBER", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(text = userProfile.memberSince, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
@@ -187,40 +205,46 @@ fun ProfileScreen(
 
         // 3. Settings list (Grouped)
         val settingsGroups = listOf(
-            "Account" to listOf(
-                SettingRowData("Edit profile", "Update display name and country", Icons.Default.Person) { activeFeedbackNotice = "Profile details synced." },
-                SettingRowData("Notifications", "Push alerts and streak reminders", Icons.Default.Notifications, onOpenNotifications)
-            ),
-            "Performance" to listOf(
-                SettingRowData("Device & input", "120Hz display, 240Hz touch polling", Icons.Default.PhoneAndroid) { activeFeedbackNotice = "Hardware specs verified." },
-                SettingRowData("Calibration", "Hardware timing sync & latency offset", Icons.Default.Speed, onOpenCalibration),
-                SettingRowData("Measurement guide", "How millisecond reflex is captured", Icons.Default.Tune) { activeFeedbackNotice = "Measurement guide loaded." }
-            ),
-            "Experience" to listOf(
-                SettingRowData("Accessibility", "Reduced motion, high contrast", Icons.Default.DisplaySettings) { activeFeedbackNotice = "High contrast theme enabled." },
-                SettingRowData("Sound & haptics", "Cues during stimulus and response", Icons.AutoMirrored.Filled.VolumeUp) { activeFeedbackNotice = "Sound and haptics active." },
-                SettingRowData("Appearance", "Dark high contrast (System locked)", Icons.Default.Tune) { activeFeedbackNotice = "Sport dark mode active." }
-            ),
-            "Privacy" to listOf(
-                SettingRowData("Leaderboard visibility", "Public ranking profile active", Icons.Default.Visibility) { activeFeedbackNotice = "Leaderboard visibility: Public." },
-                SettingRowData("Data controls", "Local Room storage & export", Icons.Default.Lock) { activeFeedbackNotice = "Data stored securely in local database." }
-            ),
-            "Support" to listOf(
-                SettingRowData("Help & documentation", "Reaction drill instructions", Icons.AutoMirrored.Filled.HelpOutline) { activeFeedbackNotice = "Documentation ready." },
-                SettingRowData("Sign out", "Clear session authorization", Icons.Default.Person) { showSignOutConfirm = true }
-            )
+            Triple("Account", Icons.Default.AccountCircle, listOf(
+                SettingRowData("Edit profile", Icons.Default.Person) { activeFeedbackNotice = "Profile details synced." },
+                SettingRowData("Notifications", Icons.Default.Notifications, onOpenNotifications)
+            )),
+            Triple("Performance", Icons.Default.Speed, listOf(
+                SettingRowData("Device & input", Icons.Default.PhoneAndroid) { activeFeedbackNotice = "Hardware specs verified." },
+                SettingRowData("Calibration", Icons.Default.Speed, onOpenCalibration),
+                SettingRowData("Measurement guide", Icons.Default.Tune) { activeFeedbackNotice = "Measurement guide loaded." }
+            )),
+            Triple("Experience", Icons.Default.Tune, listOf(
+                SettingRowData("Accessibility", Icons.Default.DisplaySettings) { activeFeedbackNotice = "High contrast theme enabled." },
+                SettingRowData("Sound & haptics", Icons.AutoMirrored.Filled.VolumeUp) { activeFeedbackNotice = "Sound and haptics active." },
+                SettingRowData("Appearance", Icons.Default.Tune) { activeFeedbackNotice = "Sport dark mode active." }
+            )),
+            Triple("Privacy", Icons.Default.Lock, listOf(
+                SettingRowData("Leaderboard visibility", Icons.Default.Visibility) { activeFeedbackNotice = "Leaderboard visibility: Public." },
+                SettingRowData("Data controls", Icons.Default.Lock) { activeFeedbackNotice = "Data stored securely in local database." }
+            )),
+            Triple("Support", Icons.AutoMirrored.Filled.HelpOutline, listOf(
+                SettingRowData("Help & documentation", Icons.AutoMirrored.Filled.HelpOutline) { activeFeedbackNotice = "Documentation ready." },
+                SettingRowData("Sign out", Icons.Default.Person) { showSignOutConfirm = true }
+            ))
         )
 
-        settingsGroups.forEach { (groupTitle, items) ->
+        settingsGroups.forEach { (groupTitle, groupIcon, items) ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = groupTitle.uppercase(),
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-                )
+                ) {
+                    Icon(imageVector = groupIcon, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = groupTitle.uppercase(),
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
 
                 Box(
                     modifier = Modifier
@@ -244,19 +268,16 @@ fun ProfileScreen(
                                     Icon(
                                         imageVector = item.icon,
                                         contentDescription = null,
-                                        tint = if (item.title == "Sign out") CoralWarning else ElectricLime,
+                                        tint = if (item.title == "Sign out") CoralWarning else BrandAccent,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(
-                                            text = item.title,
-                                            color = if (item.title == "Sign out") CoralWarning else TextPrimary,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Text(text = item.subtitle, color = TextMuted, fontSize = 11.sp)
-                                    }
+                                    Text(
+                                        text = item.title,
+                                        color = if (item.title == "Sign out") CoralWarning else TextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                                 Icon(
                                     imageVector = Icons.Default.ChevronRight,
@@ -286,7 +307,7 @@ fun ProfileScreen(
             onDismissRequest = { activeFeedbackNotice = null },
             confirmButton = {
                 TextButton(onClick = { activeFeedbackNotice = null }) {
-                    Text(text = "OK", color = ElectricLime, fontWeight = FontWeight.Bold)
+                    Text(text = "OK", color = BrandAccent, fontWeight = FontWeight.Bold)
                 }
             },
             title = { Text(text = "System Notice", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
@@ -324,7 +345,6 @@ fun ProfileScreen(
 
 private data class SettingRowData(
     val title: String,
-    val subtitle: String,
     val icon: ImageVector,
     val action: () -> Unit
 )

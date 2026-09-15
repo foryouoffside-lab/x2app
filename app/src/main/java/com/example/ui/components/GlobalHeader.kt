@@ -30,9 +30,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.BorderSubtle
+import com.example.ui.theme.BrandAccent
 import com.example.ui.theme.CharcoalCard
 import com.example.ui.theme.DarkBackground
-import com.example.ui.theme.ElectricLime
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 
@@ -70,7 +70,7 @@ fun GlobalHeader(
                         withStyle(SpanStyle(color = TextPrimary, fontWeight = FontWeight.Black, fontSize = 24.sp, fontFamily = FontFamily.SansSerif)) {
                             append("R")
                         }
-                        withStyle(SpanStyle(color = ElectricLime, fontWeight = FontWeight.Black, fontSize = 24.sp, fontFamily = FontFamily.SansSerif)) {
+                        withStyle(SpanStyle(color = BrandAccent, fontWeight = FontWeight.Black, fontSize = 24.sp, fontFamily = FontFamily.SansSerif)) {
                             append("/")
                         }
                     }
@@ -101,7 +101,7 @@ fun GlobalHeader(
                             modifier = Modifier
                                 .padding(top = 8.dp, end = 8.dp)
                                 .size(8.dp)
-                                .background(ElectricLime, CircleShape)
+                                .background(BrandAccent, CircleShape)
                         )
                     }
                 }
@@ -119,8 +119,8 @@ fun GlobalHeader(
                 ) {
                     Text(
                         text = "AM",
-                        color = ElectricLime,
-                        fontSize = 14.sp,
+                        color = BrandAccent,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }

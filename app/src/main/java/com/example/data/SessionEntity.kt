@@ -10,8 +10,15 @@ data class SessionEntity(
     val drillTitle: String,
     val timestamp: Long,
     val medianTimeMs: Long,
+    val bestTimeMs: Long = 0L,
     val accuracyPercent: Int,
     val consistencyMs: Long,
+    val cvPercent: Float = 0f,
+    val falseStarts: Int = 0,
+    val athleteName: String = "Alex Morgan",
+    val sportCategory: String = "Motorsport",
     val isVerified: Boolean = true,
+    val rawTrialsCsv: String = "",
     val note: String = ""
 )
+

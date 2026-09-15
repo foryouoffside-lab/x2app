@@ -22,14 +22,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.filled.AltRoute
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,13 +59,16 @@ import androidx.compose.ui.unit.sp
 import com.example.data.SessionEntity
 import com.example.model.PerformanceMetric
 import com.example.model.UserProfile
+import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.BorderActive
 import com.example.ui.theme.BorderSubtle
+import com.example.ui.theme.BrandAccent
 import com.example.ui.theme.CharcoalCard
 import com.example.ui.theme.CharcoalCardElevated
 import com.example.ui.theme.CoolBlue
 import com.example.ui.theme.DarkBackground
-import com.example.ui.theme.ElectricLime
+import com.example.ui.theme.SportGreen
+import com.example.ui.theme.TextInverse
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSubtle
@@ -73,6 +85,7 @@ fun ProgressScreen(
     onMetricClick: (PerformanceMetric) -> Unit,
     onBuildSession: () -> Unit,
     onViewAllRecords: () -> Unit,
+    onExportCsv: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -144,7 +157,7 @@ fun ProgressScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) ElectricLime else Color.Transparent)
+                            .background(if (isSelected) BrandAccent else Color.Transparent)
                             .clickable { onRangeSelect(range) }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                             .testTag("progress_range_${range.lowercase()}"),
@@ -152,7 +165,7 @@ fun ProgressScreen(
                     ) {
                         Text(
                             text = range,
-                            color = if (isSelected) DarkBackground else TextMuted,
+                            color = if (isSelected) TextInverse else TextMuted,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -178,13 +191,17 @@ fun ProgressScreen(
                     verticalAlignment = Alignment.Top
                 ) {
                     Column {
-                        Text(
-                            text = "MEDIAN REACTION TIME",
-                            color = TextMuted,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "MEDIAN",
+                                color = TextMuted,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "236 ms",
@@ -198,12 +215,12 @@ fun ProgressScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clip(RoundedCornerShape(50.dp))
-                            .background(ElectricLime.copy(alpha = 0.15f))
+                            .background(SportGreen.copy(alpha = 0.15f))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.TrendingDown, contentDescription = null, tint = ElectricLime, modifier = Modifier.size(14.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.TrendingDown, contentDescription = null, tint = SportGreen, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "12 ms faster than baseline", color = ElectricLime, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "-12 ms", color = SportGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -252,13 +269,13 @@ fun ProgressScreen(
                     drawPath(
                         path = fillPath,
                         brush = Brush.verticalGradient(
-                            colors = listOf(CoolBlue.copy(alpha = 0.25f), Color.Transparent)
+                            colors = listOf(BrandAccent.copy(alpha = 0.25f), Color.Transparent)
                         )
                     )
 
                     drawPath(
                         path = path,
-                        color = CoolBlue,
+                        color = BrandAccent,
                         style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                     )
 
@@ -272,7 +289,7 @@ fun ProgressScreen(
                             center = Offset(x, y)
                         )
                         drawCircle(
-                            color = if (i == points.size - 1) ElectricLime else CoolBlue,
+                            color = if (i == points.size - 1) BrandAccent else CoolBlue,
                             radius = 3.5.dp.toPx(),
                             center = Offset(x, y)
                         )
@@ -303,6 +320,12 @@ fun ProgressScreen(
             )
 
             metrics.forEach { metric ->
+                val metricIcon = when (metric.name) {
+                    "Speed" -> Icons.Default.Bolt
+                    "Accuracy" -> Icons.Default.CheckCircle
+                    "Consistency" -> Icons.Default.Timeline
+                    else -> Icons.Default.AltRoute
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -320,12 +343,22 @@ fun ProgressScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = metric.name, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = metric.detailValue, color = TextMuted, fontSize = 12.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(CharcoalCardElevated, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(imageVector = metricIcon, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(text = metric.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = metric.detailValue, color = TextMuted, fontSize = 11.sp)
+                                }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = "${metric.score} / 100", color = if (metric.score >= 80) ElectricLime else CoolBlue, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                                Text(text = "${metric.score}%", color = if (metric.score >= 80) SportGreen else AmberAlert, fontSize = 14.sp, fontWeight = FontWeight.Black)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSubtle, modifier = Modifier.size(16.dp))
                             }
@@ -339,7 +372,7 @@ fun ProgressScreen(
                                 .fillMaxWidth()
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(3.dp)),
-                            color = if (metric.score >= 80) ElectricLime else CoolBlue,
+                            color = if (metric.score >= 80) SportGreen else AmberAlert,
                             trackColor = BorderSubtle
                         )
                     }
@@ -358,36 +391,52 @@ fun ProgressScreen(
                 .testTag("coach_analysis_card")
         ) {
             Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = AmberAlert, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "COACH PRESCRIPTION",
+                        color = AmberAlert,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "COACH PRESCRIPTION",
-                    color = ElectricLime,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Best gain: visual reaction. Next focus: decision speed.",
+                    text = "Focus: Decision Speed",
                     color = TextPrimary,
-                    fontSize = 15.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Targeted drills to train motor cortex inhibition will close the trailing choice latency.",
-                    color = TextMuted,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "+18% target", color = TextMuted, fontSize = 12.sp)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.AltRoute, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "Choice drills", color = BrandAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
                 Button(
                     onClick = onBuildSession,
-                    colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
                         .testTag("build_session_button")
                 ) {
+                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(text = "Build session", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
@@ -400,38 +449,90 @@ fun ProgressScreen(
                 .clip(RoundedCornerShape(14.dp))
                 .background(CharcoalCard)
                 .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(text = "RECORDS & STATS", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${userProfile.fastestMs} ms fastest · ${userProfile.totalSessions} sessions · ${userProfile.streakDays} day streak",
-                        color = TextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Bolt, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "${userProfile.fastestMs}ms", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.FitnessCenter, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "${userProfile.totalSessions}", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.LocalFireDepartment, contentDescription = null, tint = AmberAlert, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "${userProfile.streakDays}d", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
-                TextButton(onClick = onViewAllRecords) {
-                    Text(text = "View all", color = CoolBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                IconButton(
+                    onClick = onViewAllRecords,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "View all", tint = CoolBlue, modifier = Modifier.size(16.dp))
                 }
+            }
+        }
+
+        // Coach Research CSV Export Action
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(CharcoalCardElevated)
+                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
+                .clickable { onExportCsv() }
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .testTag("coach_csv_export_card")
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(BrandAccent.copy(alpha = 0.15f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(imageVector = Icons.Default.Download, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(text = "Export Research Data (CSV)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Raw millisecond timestamps, CV%, and IAAF rule violations", color = TextSubtle, fontSize = 11.sp)
+                    }
+                }
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(16.dp))
             }
         }
 
         // 6. History
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "RECENT SESSIONS",
-                color = TextMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Default.Timeline, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "RECENT SESSIONS",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+            }
 
             if (sessions.isEmpty()) {
                 Box(
@@ -466,17 +567,33 @@ fun ProgressScreen(
                                         .background(CharcoalCardElevated, CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(imageVector = Icons.Default.Bolt, contentDescription = null, tint = ElectricLime, modifier = Modifier.size(16.dp))
+                                    Icon(imageVector = Icons.Default.Bolt, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(16.dp))
                                 }
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
-                                    Text(text = session.drillTitle, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                    Text(text = dateFormat.format(Date(session.timestamp)), color = TextSubtle, fontSize = 11.sp)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(text = session.drillTitle, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        if (session.athleteName.isNotBlank() && session.athleteName != "Self") {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(text = "· ${session.athleteName}", color = CoolBlue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(text = dateFormat.format(Date(session.timestamp)), color = TextSubtle, fontSize = 11.sp)
+                                        if (session.cvPercent > 0) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(text = "· CV ${session.cvPercent}%", color = if (session.cvPercent < 8f) SportGreen else TextSubtle, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                        if (session.falseStarts > 0) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(text = "· ${session.falseStarts} FS", color = AmberAlert, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text(text = "${session.medianTimeMs} ms", color = ElectricLime, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "${session.medianTimeMs} ms", color = SportGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                     Text(text = "${session.accuracyPercent}% acc", color = TextMuted, fontSize = 11.sp)
                                 }
                             }

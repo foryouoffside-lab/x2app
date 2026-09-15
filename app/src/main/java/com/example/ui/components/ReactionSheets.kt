@@ -19,12 +19,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Notifications
@@ -62,13 +68,16 @@ import com.example.model.DrillType
 import com.example.model.LeaderboardPlayer
 import com.example.model.NotificationItem
 import com.example.model.PerformanceMetric
+import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.BorderActive
 import com.example.ui.theme.BorderSubtle
+import com.example.ui.theme.BrandAccent
 import com.example.ui.theme.CharcoalCard
 import com.example.ui.theme.CharcoalCardElevated
 import com.example.ui.theme.CoolBlue
 import com.example.ui.theme.DarkBackground
-import com.example.ui.theme.ElectricLime
+import com.example.ui.theme.SportGreen
+import com.example.ui.theme.TextInverse
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSubtle
@@ -104,13 +113,13 @@ fun CoachInsightSheet(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .background(ElectricLime.copy(alpha = 0.15f), CircleShape),
+                            .background(BrandAccent.copy(alpha = 0.15f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Psychology,
                             contentDescription = null,
-                            tint = ElectricLime,
+                            tint = BrandAccent,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -136,13 +145,17 @@ fun CoachInsightSheet(
                     .padding(16.dp)
             ) {
                 Column {
-                    Text(
-                        text = "CORE OBSERVATION",
-                        color = ElectricLime,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Outlined.Psychology, contentDescription = null, tint = AmberAlert, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "OBSERVATION",
+                            color = AmberAlert,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Your choice speed is trailing your visual speed.",
@@ -163,7 +176,7 @@ fun CoachInsightSheet(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CircularProgressIndicator(color = ElectricLime, modifier = Modifier.size(28.dp))
+                    CircularProgressIndicator(color = BrandAccent, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text("Synthesizing neural model...", color = TextMuted, fontSize = 14.sp)
                 }
@@ -180,13 +193,15 @@ fun CoachInsightSheet(
 
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
             ) {
-                Text("Understood", fontWeight = FontWeight.Bold)
+                Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Done", fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -232,7 +247,7 @@ fun DrillDetailSheet(
                         Icon(
                             imageVector = Icons.Filled.Bolt,
                             contentDescription = null,
-                            tint = ElectricLime,
+                            tint = BrandAccent,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -260,7 +275,11 @@ fun DrillDetailSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Duration selector: 3 min, 5 min, 8 min
-            Text(text = "DURATION", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "DURATION", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -272,15 +291,15 @@ fun DrillDetailSheet(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) ElectricLime else CharcoalCardElevated)
-                            .border(1.dp, if (isSelected) ElectricLime else BorderSubtle, RoundedCornerShape(12.dp))
+                            .background(if (isSelected) BrandAccent else CharcoalCardElevated)
+                            .border(1.dp, if (isSelected) BrandAccent else BorderSubtle, RoundedCornerShape(12.dp))
                             .clickable { onDurationSelected(duration) }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = duration,
-                            color = if (isSelected) DarkBackground else TextPrimary,
+                            color = if (isSelected) TextInverse else TextPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -291,7 +310,11 @@ fun DrillDetailSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Metrics preview
-            Text(text = "METRICS RECORDED", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(text = "METRICS", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier
@@ -303,7 +326,7 @@ fun DrillDetailSheet(
             ) {
                 listOf("Median", "Accuracy", "Consistency").forEach { metric ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = ElectricLime, modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = SportGreen, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(text = metric, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
@@ -331,8 +354,8 @@ fun DrillDetailSheet(
                     checked = soundEnabled,
                     onCheckedChange = onSoundToggle,
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = DarkBackground,
-                        checkedTrackColor = ElectricLime,
+                        checkedThumbColor = TextInverse,
+                        checkedTrackColor = BrandAccent,
                         uncheckedThumbColor = TextMuted,
                         uncheckedTrackColor = BorderSubtle
                     )
@@ -344,14 +367,16 @@ fun DrillDetailSheet(
             // Primary Start drill button
             Button(
                 onClick = onStartDrill,
-                colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
                     .testTag("start_drill_button")
             ) {
-                Text(text = "Start drill", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Start Drill", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -361,7 +386,9 @@ fun DrillDetailSheet(
                 onClick = onHowScoringWorks,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(text = "How scoring works", color = CoolBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Icon(imageVector = Icons.Outlined.Info, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "Scoring guide", color = CoolBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -404,7 +431,7 @@ fun ScoringWorksSheet(onDismiss: () -> Unit) {
 
             items.forEach { (title, desc) ->
                 Column(modifier = Modifier.padding(bottom = 14.dp)) {
-                    Text(text = title, color = ElectricLime, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(text = title, color = BrandAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(text = desc, color = TextPrimary, fontSize = 13.sp, lineHeight = 19.sp)
                 }
@@ -412,10 +439,12 @@ fun ScoringWorksSheet(onDismiss: () -> Unit) {
 
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
+                Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text("Got it", fontWeight = FontWeight.Bold)
             }
         }
@@ -449,7 +478,9 @@ fun NotificationsSheet(
                 Text(text = "Notifications", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = onMarkAllRead) {
-                        Text(text = "Mark all read", color = ElectricLime, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(imageVector = Icons.Default.DoneAll, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "All read", color = BrandAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
@@ -465,7 +496,7 @@ fun NotificationsSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
-                            .border(1.dp, if (item.isUnread) ElectricLime.copy(alpha = 0.5f) else BorderSubtle, RoundedCornerShape(12.dp))
+                            .border(1.dp, if (item.isUnread) BrandAccent.copy(alpha = 0.5f) else BorderSubtle, RoundedCornerShape(12.dp))
                             .padding(14.dp)
                     ) {
                         Row(verticalAlignment = Alignment.Top) {
@@ -473,7 +504,7 @@ fun NotificationsSheet(
                                 modifier = Modifier
                                     .padding(top = 2.dp)
                                     .size(8.dp)
-                                    .background(if (item.isUnread) ElectricLime else Color.Transparent, CircleShape)
+                                    .background(if (item.isUnread) BrandAccent else Color.Transparent, CircleShape)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
@@ -531,10 +562,10 @@ fun PlayerSummarySheet(
                     modifier = Modifier
                         .size(54.dp)
                         .background(CharcoalCardElevated, CircleShape)
-                        .border(1.5.dp, if (player.isCurrentUser) ElectricLime else BorderSubtle, CircleShape),
+                        .border(1.5.dp, if (player.isCurrentUser) BrandAccent else BorderSubtle, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = player.avatarInitial, color = if (player.isCurrentUser) ElectricLime else TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(text = player.avatarInitial, color = if (player.isCurrentUser) BrandAccent else TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
@@ -544,7 +575,7 @@ fun PlayerSummarySheet(
                         Text(text = player.countryFlag, fontSize = 16.sp)
                         if (player.isVerified) {
                             Spacer(modifier = Modifier.width(4.dp))
-                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Verified", tint = ElectricLime, modifier = Modifier.size(16.dp))
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Verified", tint = SportGreen, modifier = Modifier.size(16.dp))
                         }
                     }
                     Text(text = "${player.handle} · Rank #${player.rank}", color = TextMuted, fontSize = 13.sp)
@@ -565,8 +596,12 @@ fun PlayerSummarySheet(
                         .padding(14.dp)
                 ) {
                     Column {
-                        Text(text = "RPI RATING", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "${player.rpi}", color = ElectricLime, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "RPI", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text(text = "${player.rpi}", color = BrandAccent, fontSize = 22.sp, fontWeight = FontWeight.Black)
                     }
                 }
                 Box(
@@ -577,7 +612,11 @@ fun PlayerSummarySheet(
                         .padding(14.dp)
                 ) {
                     Column {
-                        Text(text = "BEST RESULT", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Bolt, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "BEST", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                         Text(text = player.scoreText, color = CoolBlue, fontSize = 22.sp, fontWeight = FontWeight.Black)
                     }
                 }
@@ -593,7 +632,11 @@ fun PlayerSummarySheet(
                     .padding(14.dp)
             ) {
                 Column {
-                    Text(text = "SIGNATURE DRILL", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "SIGNATURE", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(text = player.bestDrill, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
@@ -607,6 +650,8 @@ fun PlayerSummarySheet(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
+                Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text("Close")
             }
         }
@@ -657,14 +702,14 @@ fun MetricDetailSheet(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) ElectricLime else CharcoalCardElevated)
+                            .background(if (isSelected) BrandAccent else CharcoalCardElevated)
                             .clickable { selectedRange = range }
                             .padding(vertical = 6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = range,
-                            color = if (isSelected) DarkBackground else TextMuted,
+                            color = if (isSelected) TextInverse else TextMuted,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -682,8 +727,12 @@ fun MetricDetailSheet(
                     .padding(16.dp)
             ) {
                 Column {
-                    Text(text = "CURRENT SCORE", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(text = "${metric.score} / 100", color = ElectricLime, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "SCORE", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text(text = "${metric.score} / 100", color = BrandAccent, fontSize = 28.sp, fontWeight = FontWeight.Black)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(text = metric.detailValue, color = CoolBlue, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
@@ -691,13 +740,21 @@ fun MetricDetailSheet(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text(text = "ABOUT THIS METRIC", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Outlined.Info, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = "ABOUT", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = metric.description, color = TextPrimary, fontSize = 13.sp, lineHeight = 20.sp)
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text(text = "TREND SUMMARY", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Default.TrendingUp, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = "TREND", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = metric.trendDescription, color = TextPrimary, fontSize = 13.sp, lineHeight = 20.sp)
 
@@ -705,10 +762,12 @@ fun MetricDetailSheet(
 
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
+                Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text("Close", fontWeight = FontWeight.Bold)
             }
         }
@@ -768,7 +827,7 @@ fun CalibrationSheet(
                         modifier = Modifier
                             .weight(1f)
                             .height(4.dp)
-                            .background(if (isActive) ElectricLime else BorderSubtle, RoundedCornerShape(2.dp))
+                            .background(if (isActive) BrandAccent else BorderSubtle, RoundedCornerShape(2.dp))
                     )
                 }
             }
@@ -787,7 +846,7 @@ fun CalibrationSheet(
                     ) {
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = ElectricLime, modifier = Modifier.size(20.dp))
+                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = SportGreen, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(text = "120 Hz Dynamic Refresh Detected", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             }
@@ -798,11 +857,13 @@ fun CalibrationSheet(
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(
                         onClick = { step = 2 },
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
-                        Text("Next: Choose Input", fontWeight = FontWeight.Bold)
+                        Text("Next: Input", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                     }
                 }
                 2 -> {
@@ -823,11 +884,13 @@ fun CalibrationSheet(
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(
                         onClick = { step = 3 },
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
-                        Text("Next: Run 3-Tap Sample", fontWeight = FontWeight.Bold)
+                        Text("Next: Sample", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                     }
                 }
                 3 -> {
@@ -842,7 +905,7 @@ fun CalibrationSheet(
                             modifier = Modifier
                                 .size(100.dp)
                                 .clip(CircleShape)
-                                .background(ElectricLime)
+                                .background(BrandAccent)
                                 .clickable {
                                     tapSampleCount++
                                     if (tapSampleCount >= 3) {
@@ -852,7 +915,7 @@ fun CalibrationSheet(
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = "TAP", color = DarkBackground, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                            Text(text = "TAP", color = TextInverse, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(text = "Measuring raw touch response delay...", color = TextSubtle, fontSize = 12.sp)
@@ -864,12 +927,12 @@ fun CalibrationSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
-                            .border(1.dp, ElectricLime, RoundedCornerShape(12.dp))
+                            .border(1.dp, SportGreen, RoundedCornerShape(12.dp))
                             .padding(16.dp)
                     ) {
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = ElectricLime, modifier = Modifier.size(22.dp))
+                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = SportGreen, modifier = Modifier.size(22.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(text = "Calibration Verified: Grade A", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                             }
@@ -880,11 +943,13 @@ fun CalibrationSheet(
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
-                        Text("Apply Calibration & Finish", fontWeight = FontWeight.Bold)
+                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Apply Calibration", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -892,7 +957,7 @@ fun CalibrationSheet(
             if (step < 4) {
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "Skip for now (Standard result mode)", color = TextSubtle, fontSize = 12.sp)
+                    Text(text = "Skip", color = TextSubtle, fontSize = 12.sp)
                 }
             }
         }

@@ -19,13 +19,16 @@ import com.example.model.DrillType
 import com.example.model.PerformanceMetric
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.CalibrationSheet
+import com.example.ui.components.CoachExportDialog
 import com.example.ui.components.CoachInsightSheet
 import com.example.ui.components.DrillDetailSheet
 import com.example.ui.components.GlobalHeader
 import com.example.ui.components.MetricDetailSheet
 import com.example.ui.components.NotificationsSheet
 import com.example.ui.components.PlayerSummarySheet
+import com.example.ui.components.RosterSheet
 import com.example.ui.components.ScoringWorksSheet
+import com.example.ui.components.SportsBatterySheet
 import com.example.ui.screens.ActiveDrillScreen
 import com.example.ui.screens.CompeteScreen
 import com.example.ui.screens.HomeScreen
@@ -80,6 +83,17 @@ fun ReactionApp(
     val soundEnabled by viewModel.soundCuesEnabled.collectAsState()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
 
+    val showRoster by viewModel.showRosterSheet.collectAsState()
+    val activeAthlete by viewModel.activeAthlete.collectAsState()
+    val rosterList = viewModel.rosterList
+
+    val showBattery by viewModel.showBatterySheet.collectAsState()
+    val selectedBattery by viewModel.selectedBattery.collectAsState()
+    val sportsBatteries = viewModel.sportsBatteries
+
+    val showExportDialog by viewModel.showExportDialog.collectAsState()
+    val exportCsvContent by viewModel.exportCsvContent.collectAsState()
+
     when (activeScreen) {
         ActiveScreen.ACTIVE_DRILL -> {
             BackHandler {
@@ -91,8 +105,20 @@ fun ReactionApp(
                 soundEnabled = soundEnabled,
                 hapticsEnabled = hapticsEnabled,
                 onExitDrill = { viewModel.exitActiveDrill() },
-                onCompleteRun = { median, best, accuracy, consistency ->
-                    viewModel.completeDrillRun(activeDrillType, median, best, accuracy, consistency)
+                onCompleteRun = { median, best, accuracy, consistency, cv, falseStarts, ies, exTau, cnsHz, trials ->
+                    viewModel.completeDrillRun(
+                        type = activeDrillType,
+                        medianMs = median,
+                        bestMs = best,
+                        accuracyPercent = accuracy,
+                        consistencyMs = consistency,
+                        cvPercent = cv,
+                        falseStarts = falseStarts,
+                        iesScore = ies,
+                        exGaussianTau = exTau,
+                        cnsHz = cnsHz,
+                        rawTrials = trials
+                    )
                 }
             )
         }
@@ -141,6 +167,10 @@ fun ReactionApp(
                         AppTab.HOME -> {
                             HomeScreen(
                                 userProfile = userProfile,
+                                activeAthlete = activeAthlete,
+                                onOpenRoster = { viewModel.openRoster() },
+                                batteries = sportsBatteries,
+                                onOpenBattery = { battery -> viewModel.openBatteryDetail(battery) },
                                 onStartSession = { type -> viewModel.startDrill(type) },
                                 onPlayChallenge = { viewModel.startDrill(DrillType.FLASH_GRID, dailyMode = true) },
                                 onOpenWhyCoach = { viewModel.openCoachInsight() },
@@ -152,11 +182,13 @@ fun ReactionApp(
                             TrainScreen(
                                 drills = viewModel.coreDrills,
                                 selectedFilter = trainFilter,
-                                onFilterSelect = { filter -> viewModel.trainFilter.value = filter },
+                                onFilterSelect = { filter -> viewModel.setTrainFilter(filter) },
                                 onDrillClick = { drill -> viewModel.openDrillDetail(drill) },
                                 onStartRecommended = { viewModel.startDrill(DrillType.CHOICE) },
                                 onContinueTraining = { viewModel.startDrill(DrillType.CLASSIC) },
-                                onYourPlanClick = { viewModel.openCoachInsight() }
+                                onYourPlanClick = { viewModel.openCoachInsight() },
+                                batteries = sportsBatteries,
+                                onOpenBattery = { battery -> viewModel.openBatteryDetail(battery) }
                             )
                         }
 
@@ -168,7 +200,7 @@ fun ReactionApp(
                             }
                             CompeteScreen(
                                 currentTab = leaderboardTab,
-                                onTabSelected = { tab -> viewModel.leaderboardTab.value = tab },
+                                onTabSelected = { tab -> viewModel.setLeaderboardTab(tab) },
                                 players = players,
                                 onPlayToday = { viewModel.startDrill(DrillType.FLASH_GRID, dailyMode = true) },
                                 onPlayerClick = { player -> viewModel.openPlayerSummary(player) },
@@ -181,10 +213,11 @@ fun ReactionApp(
                                 userProfile = userProfile,
                                 sessions = sessions,
                                 selectedRange = progressRange,
-                                onRangeSelect = { range -> viewModel.progressTimeRange.value = range },
+                                onRangeSelect = { range -> viewModel.setProgressTimeRange(range) },
                                 onMetricClick = { metric -> viewModel.openMetricDetail(metric) },
                                 onBuildSession = { viewModel.startDrill(DrillType.CHOICE) },
-                                onViewAllRecords = { viewModel.openMetricDetail(PerformanceMetric("Speed", 82, "Median 236 ms", "+3.4% this month", "Simple visual reflex latency")) }
+                                onViewAllRecords = { viewModel.openMetricDetail(PerformanceMetric("Speed", 82, "Median 236 ms", "+3.4% this month", "Simple visual reflex latency")) },
+                                onExportCsv = { viewModel.openExportDialog() }
                             )
                         }
 
@@ -204,9 +237,9 @@ fun ReactionApp(
                 DrillDetailSheet(
                     drill = drill,
                     selectedDuration = selectedDuration,
-                    onDurationSelected = { viewModel.selectedDuration.value = it },
+                    onDurationSelected = { viewModel.setSelectedDuration(it) },
                     soundEnabled = soundEnabled,
-                    onSoundToggle = { viewModel.soundCuesEnabled.value = it },
+                    onSoundToggle = { viewModel.setSoundCuesEnabled(it) },
                     onStartDrill = { viewModel.startDrill(drill.type) },
                     onHowScoringWorks = { viewModel.openScoringWorks() },
                     onDismiss = { viewModel.closeDrillDetail() }
@@ -252,6 +285,30 @@ fun ReactionApp(
             if (showScoringWorks) {
                 ScoringWorksSheet(
                     onDismiss = { viewModel.closeScoringWorks() }
+                )
+            }
+
+            if (showRoster) {
+                RosterSheet(
+                    roster = rosterList,
+                    activeAthlete = activeAthlete,
+                    onSelectAthlete = { athlete -> viewModel.switchAthlete(athlete) },
+                    onDismiss = { viewModel.closeRoster() }
+                )
+            }
+
+            selectedBattery?.let { battery ->
+                SportsBatterySheet(
+                    battery = battery,
+                    onStartBattery = { b -> viewModel.startBatteryFirstDrill(b) },
+                    onDismiss = { viewModel.closeBatteryDetail() }
+                )
+            }
+
+            if (showExportDialog) {
+                CoachExportDialog(
+                    csvContent = exportCsvContent,
+                    onDismiss = { viewModel.closeExportDialog() }
                 )
             }
         }

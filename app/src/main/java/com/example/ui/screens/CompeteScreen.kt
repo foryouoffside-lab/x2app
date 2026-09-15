@@ -22,13 +22,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,13 +56,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.LeaderboardPlayer
+import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.BorderActive
 import com.example.ui.theme.BorderSubtle
+import com.example.ui.theme.BrandAccent
 import com.example.ui.theme.CharcoalCard
 import com.example.ui.theme.CharcoalCardElevated
 import com.example.ui.theme.CoolBlue
 import com.example.ui.theme.DarkBackground
-import com.example.ui.theme.ElectricLime
+import com.example.ui.theme.SportGreen
+import com.example.ui.theme.TextInverse
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSubtle
@@ -95,13 +108,13 @@ fun CompeteScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50.dp))
-                    .background(ElectricLime.copy(alpha = 0.15f))
-                    .border(1.dp, ElectricLime.copy(alpha = 0.4f), RoundedCornerShape(50.dp))
+                    .background(BrandAccent.copy(alpha = 0.15f))
+                    .border(1.dp, BrandAccent.copy(alpha = 0.4f), RoundedCornerShape(50.dp))
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
                     text = "R 742",
-                    color = ElectricLime,
+                    color = BrandAccent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Black
                 )
@@ -124,17 +137,21 @@ fun CompeteScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "DAILY CHALLENGE",
-                        color = ElectricLime,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = AmberAlert, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "CHALLENGE",
+                            color = AmberAlert,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(13.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "08:42:16 left", color = CoolBlue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text(text = "08:42:16", color = CoolBlue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -143,32 +160,49 @@ fun CompeteScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(50.dp)
+                            .size(46.dp)
                             .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
                             .border(1.dp, BorderActive, RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(imageVector = Icons.Default.GridOn, contentDescription = null, tint = ElectricLime, modifier = Modifier.size(26.dp))
+                        Icon(imageVector = Icons.Default.GridOn, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(24.dp))
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column {
-                        Text(text = "Flash Grid", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Same rules for everyone · 2.4k playing", color = TextMuted, fontSize = 12.sp)
+                        Text(text = "Flash Grid", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.Group, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(text = "2.4k", color = TextMuted, fontSize = 12.sp)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.Public, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(text = "Global", color = TextMuted, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Button(
                     onClick = onPlayToday,
-                    colors = ButtonDefaults.buttonColors(containerColor = ElectricLime, contentColor = DarkBackground),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(46.dp)
                         .testTag("play_today_button")
                 ) {
-                    Text(text = "Play today", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "Play", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -179,7 +213,7 @@ fun CompeteScreen(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(CharcoalCardElevated)
-                .border(1.dp, ElectricLime.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                .border(1.dp, BrandAccent.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
                 .padding(16.dp)
                 .testTag("your_position_card")
         ) {
@@ -189,30 +223,39 @@ fun CompeteScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(text = "YOUR GLOBAL POSITION", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Public, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "GLOBAL", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(text = "#18,492", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
-                                .background(ElectricLime.copy(alpha = 0.15f), RoundedCornerShape(50.dp))
+                                .background(BrandAccent.copy(alpha = 0.15f), RoundedCornerShape(50.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text(text = "Top 18%", color = ElectricLime, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Top 18%", color = BrandAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = ElectricLime, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = SportGreen, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "+214 places today", color = ElectricLime, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "+214", color = SportGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        // 4. Leaderboard tabs (Global, Country, Friends)
+        // 4. Leaderboard tabs (Global, Country, Friends with icons)
+        val tabList = listOf(
+            "Global" to Icons.Default.Public,
+            "Country" to Icons.Default.Flag,
+            "Friends" to Icons.Default.Group
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -222,24 +265,33 @@ fun CompeteScreen(
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            listOf("Global", "Country", "Friends").forEach { tab ->
+            tabList.forEach { (tab, icon) ->
                 val isSelected = currentTab == tab
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) ElectricLime else Color.Transparent)
+                        .background(if (isSelected) BrandAccent else Color.Transparent)
                         .clickable { onTabSelected(tab) }
                         .padding(vertical = 8.dp)
                         .testTag("leaderboard_tab_${tab.lowercase()}"),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = tab,
-                        color = if (isSelected) DarkBackground else TextMuted,
-                        fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = if (isSelected) TextInverse else TextMuted,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = tab,
+                            color = if (isSelected) TextInverse else TextMuted,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
@@ -253,7 +305,7 @@ fun CompeteScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(if (isSelf) CharcoalCardElevated else CharcoalCard)
-                        .border(1.dp, if (isSelf) ElectricLime.copy(alpha = 0.5f) else BorderSubtle, RoundedCornerShape(12.dp))
+                        .border(1.dp, if (isSelf) BrandAccent.copy(alpha = 0.5f) else BorderSubtle, RoundedCornerShape(12.dp))
                         .clickable { onPlayerClick(player) }
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                         .testTag("player_row_${player.rank}")
@@ -266,7 +318,7 @@ fun CompeteScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "#${player.rank}",
-                                color = if (player.rank <= 3) ElectricLime else TextMuted,
+                                color = if (player.rank <= 3) AmberAlert else TextMuted,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.width(42.dp)
@@ -275,12 +327,12 @@ fun CompeteScreen(
                                 modifier = Modifier
                                     .size(34.dp)
                                     .background(CharcoalCard, CircleShape)
-                                    .border(1.dp, if (isSelf) ElectricLime else BorderSubtle, CircleShape),
+                                    .border(1.dp, if (isSelf) BrandAccent else BorderSubtle, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = player.avatarInitial,
-                                    color = if (isSelf) ElectricLime else TextPrimary,
+                                    color = if (isSelf) BrandAccent else TextPrimary,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -290,7 +342,7 @@ fun CompeteScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = player.name,
-                                        color = if (isSelf) ElectricLime else TextPrimary,
+                                        color = if (isSelf) BrandAccent else TextPrimary,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -298,7 +350,7 @@ fun CompeteScreen(
                                     Text(text = player.countryFlag, fontSize = 12.sp)
                                     if (player.isVerified) {
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Verified", tint = ElectricLime, modifier = Modifier.size(13.dp))
+                                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Verified", tint = SportGreen, modifier = Modifier.size(13.dp))
                                     }
                                 }
                                 Text(text = player.handle, color = TextSubtle, fontSize = 11.sp)
@@ -323,7 +375,7 @@ fun CompeteScreen(
                 .clip(RoundedCornerShape(12.dp))
                 .background(CharcoalCard)
                 .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -331,15 +383,19 @@ fun CompeteScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "Classic Reaction", color = TextMuted, fontSize = 13.sp)
+                    Icon(imageVector = Icons.Default.Bolt, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "Classic", color = TextMuted, fontSize = 13.sp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "214 ms", color = ElectricLime, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "214 ms", color = BrandAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
-                TextButton(
+                IconButton(
                     onClick = onSeeRecords,
-                    modifier = Modifier.testTag("see_records_button")
+                    modifier = Modifier
+                        .size(32.dp)
+                        .testTag("see_records_button")
                 ) {
-                    Text(text = "See records", color = CoolBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "See records", tint = CoolBlue, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -351,25 +407,35 @@ fun CompeteScreen(
                 .clip(RoundedCornerShape(12.dp))
                 .background(CharcoalCard.copy(alpha = 0.5f))
                 .border(1.dp, BorderSubtle.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                .padding(14.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(text = "Coming soon: Duels", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text(text = "Synchronous 1v1 head-to-head reaction matches", color = TextSubtle, fontSize = 11.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.FlashOn, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(text = "Duels", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(text = "1v1 sync match", color = TextSubtle, fontSize = 11.sp)
+                    }
                 }
                 OutlinedButton(
                     onClick = { joinedWaitlist = true },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = if (joinedWaitlist) ElectricLime else TextPrimary),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = if (joinedWaitlist) SportGreen else TextPrimary),
                     border = BorderStroke(1.dp, BorderSubtle),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Text(text = if (joinedWaitlist) "On waitlist" else "Join waitlist", fontSize = 11.sp)
+                    if (joinedWaitlist) {
+                        Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = SportGreen, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "Joined", fontSize = 11.sp, color = SportGreen)
+                    } else {
+                        Text(text = "Waitlist", fontSize = 11.sp)
+                    }
                 }
             }
         }

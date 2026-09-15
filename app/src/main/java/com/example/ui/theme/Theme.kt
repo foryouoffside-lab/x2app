@@ -6,16 +6,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val ReactionColorScheme = darkColorScheme(
-    primary = ElectricLime,
+    primary = BrandAccent,
     onPrimary = TextInverse,
-    primaryContainer = Color(0xFF22380E),
-    onPrimaryContainer = ElectricLime,
+    primaryContainer = Color(0xFF0F3A2E),
+    onPrimaryContainer = BrandAccent,
     secondary = CoolBlue,
-    onSecondary = Color(0xFF002244),
-    secondaryContainer = Color(0xFF132B45),
+    onSecondary = TextInverse,
+    secondaryContainer = Color(0xFF0F3A2E),
     onSecondaryContainer = CoolBlue,
-    tertiary = CoralWarning,
-    onTertiary = Color.White,
+    tertiary = SportGreen,
+    onTertiary = TextInverse,
     background = DarkBackground,
     onBackground = TextPrimary,
     surface = CharcoalCard,
