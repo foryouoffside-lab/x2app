@@ -7,6 +7,9 @@ import com.example.data.GeminiCoachService
 import com.example.data.ReactionDatabase
 import com.example.data.SessionEntity
 import com.example.model.AthleteProfile
+import com.example.model.BatteryAssessmentResult
+import com.example.model.BatteryDrillScore
+import com.example.model.BatteryProtocolType
 import com.example.model.DrillCategory
 import com.example.model.DrillInfo
 import com.example.model.DrillRunResult
@@ -14,7 +17,9 @@ import com.example.model.DrillType
 import com.example.model.LeaderboardPlayer
 import com.example.model.NotificationItem
 import com.example.model.PerformanceMetric
+import com.example.model.SensoryInput
 import com.example.model.SportsBattery
+import com.example.model.TaskComplexity
 import com.example.model.TrialRecord
 import com.example.model.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -180,9 +185,25 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
     private val _showExportDialog = MutableStateFlow(false)
     val showExportDialog: StateFlow<Boolean> = _showExportDialog.asStateFlow()
 
-    // Complete Professional Neuro-Athletic Drill Library (12 Proven Protocols in 5 Categories)
+    data class BatterySessionState(
+        val battery: SportsBattery,
+        val drillResults: MutableMap<DrillType, BatteryDrillScore> = mutableMapOf(),
+        var currentCombineIndex: Int = 0,
+        var isCombineActive: Boolean = false
+    )
+
+    private val _batterySessionState = MutableStateFlow<BatterySessionState?>(null)
+    val batterySessionState: StateFlow<BatterySessionState?> = _batterySessionState.asStateFlow()
+
+    private val _batteryAssessmentResult = MutableStateFlow<BatteryAssessmentResult?>(null)
+    val batteryAssessmentResult: StateFlow<BatteryAssessmentResult?> = _batteryAssessmentResult.asStateFlow()
+
+    private val _showBatteryResultSheet = MutableStateFlow(false)
+    val showBatteryResultSheet: StateFlow<Boolean> = _showBatteryResultSheet.asStateFlow()
+
+    // Complete Professional Neuro-Athletic Drill Library (13 Proven Protocols across Complexity & Sensory Inputs)
     val coreDrills = listOf(
-        // --- 1. SENSORY REFLEX ---
+        // --- 1. SENSORY REFLEX (Simple Reaction Time - SRT) ---
         DrillInfo(
             type = DrillType.CLASSIC,
             subtitle = "Simple Visual Latency (SRT)",
@@ -191,6 +212,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "5 trials with randomized delay (1.8s - 3.8s). Penalizes anticipations under 100ms per IAAF Olympic rules.",
             defaultDuration = "1 min",
             categoryEnum = DrillCategory.SENSORY,
+            complexity = TaskComplexity.SRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "< 200 ms",
             difficulty = "Foundational",
             levelNumber = 1
@@ -203,8 +226,24 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "Pure 880Hz acoustic tone. Screen remains neutral to isolate and train acoustic startle reflex.",
             defaultDuration = "1 min",
             categoryEnum = DrillCategory.SENSORY,
+            complexity = TaskComplexity.SRT,
+            sensoryInput = SensoryInput.AUDITORY,
             targetBenchmark = "< 160 ms",
             difficulty = "Intermediate",
+            levelNumber = 2
+        ),
+        DrillInfo(
+            type = DrillType.TACTILE,
+            subtitle = "Somatosensory Haptic Reflex",
+            badge = "HAPTIC PULSE",
+            purpose = "Measures somatosensory tactile pathway latency. Triggered purely by skin mechanoreceptors and physical vibration.",
+            protocolDetails = "Neutral dark screen. Instant microsecond impulse triggered by sudden vibration burst without visual warning.",
+            defaultDuration = "1 min",
+            categoryEnum = DrillCategory.SENSORY,
+            complexity = TaskComplexity.SRT,
+            sensoryInput = SensoryInput.TACTILE,
+            targetBenchmark = "< 180 ms",
+            difficulty = "Foundational",
             levelNumber = 2
         ),
         DrillInfo(
@@ -215,12 +254,14 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "FIA Gantry simulation. Hold focus through sequential illumination, strike the microsecond lights shut off.",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.SENSORY,
+            complexity = TaskComplexity.SRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "< 195 ms",
             difficulty = "Elite",
             levelNumber = 3
         ),
 
-        // --- 2. COGNITIVE & DECISION ---
+        // --- 2. COGNITIVE & DECISION (Choice Reaction Time - CRT) ---
         DrillInfo(
             type = DrillType.CHOICE,
             subtitle = "Directional Decision Latency (CRT)",
@@ -229,6 +270,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "2-choice spatial vector discrimination. Quantifies millisecond overhead added by decision bifurcation.",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.COGNITIVE,
+            complexity = TaskComplexity.CRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "< 260 ms",
             difficulty = "Intermediate",
             levelNumber = 2
@@ -241,6 +284,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "Semantic vs chromatic interference. Tap the button matching the displayed ink color, not the word.",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.COGNITIVE,
+            complexity = TaskComplexity.CRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "< 360 ms",
             difficulty = "Advanced",
             levelNumber = 3
@@ -250,15 +295,87 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             subtitle = "Numerical Parity Discrimination",
             badge = "DUAL-CHANNEL",
             purpose = "Tests split-second mathematical category discrimination. Rapid cognitive classification under microsecond pressure.",
-            protocolDetails = "High-speed randomized digits flash. Immediately classify parity (Even vs Odd) withouthesitation.",
+            protocolDetails = "High-speed randomized digits flash. Immediately classify parity (Even vs Odd) without hesitation.",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.COGNITIVE,
+            complexity = TaskComplexity.CRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "< 320 ms",
             difficulty = "Intermediate",
             levelNumber = 2
         ),
+        DrillInfo(
+            type = DrillType.CHOICE_4WAY,
+            subtitle = "4-Way Cardinal Arrow Keys (CRT)",
+            badge = "SPATIAL VECTORS",
+            purpose = "Measures 4-choice directional discrimination across cardinal axes (Up, Down, Left, Right). Eliminates single-axis motor anticipation.",
+            protocolDetails = "Randomized cardinal arrow appears. Strike matching directional pad. Strict IAAF <100ms false start and MAD outlier filtering.",
+            defaultDuration = "2 min",
+            categoryEnum = DrillCategory.COGNITIVE,
+            complexity = TaskComplexity.CRT,
+            sensoryInput = SensoryInput.VISUAL,
+            targetBenchmark = "< 330 ms",
+            difficulty = "Intermediate",
+            levelNumber = 2
+        ),
+        DrillInfo(
+            type = DrillType.COLOR_MATCH,
+            subtitle = "Chromatic Color Matching Choice (CRT)",
+            badge = "COLOR STIMULUS",
+            purpose = "Measures 4-way chromatic stimulus-to-motor translation speed. Tests visual cortex hue discrimination and response selection.",
+            protocolDetails = "Screen flashes Red, Blue, Green, or Amber. Strike corresponding color tile. Bypasses directional motor bias.",
+            defaultDuration = "2 min",
+            categoryEnum = DrillCategory.COGNITIVE,
+            complexity = TaskComplexity.CRT,
+            sensoryInput = SensoryInput.VISUAL,
+            targetBenchmark = "< 340 ms",
+            difficulty = "Intermediate",
+            levelNumber = 2
+        ),
+        DrillInfo(
+            type = DrillType.GRID_TRACKING,
+            subtitle = "4x4 Matrix Grid Tracking (CRT)",
+            badge = "16-NODE MATRIX",
+            purpose = "Expands spatial choice reaction from 1D/2D buttons to an entire 16-cell interactive matrix. Demands visual search + choice targeting.",
+            protocolDetails = "Active coordinate flashes across 4x4 matrix. Direct digitizer contact timestamped with hardware timer.",
+            defaultDuration = "2 min",
+            categoryEnum = DrillCategory.COGNITIVE,
+            complexity = TaskComplexity.CRT,
+            sensoryInput = SensoryInput.VISUAL,
+            targetBenchmark = "< 400 ms",
+            difficulty = "Advanced",
+            levelNumber = 3
+        ),
+        DrillInfo(
+            type = DrillType.SPATIAL_AUDIO,
+            subtitle = "Spatial Binaural Audio Vector (CRT)",
+            badge = "BINAURAL STEREO",
+            purpose = "Evaluates interaural time difference and auditory choice speed. Stimulus is acoustic (Left vs Right earbud channel) with motor choice.",
+            protocolDetails = "Sub-millisecond acoustic impulse fired in Left or Right channel. Athlete selects corresponding ear trigger.",
+            defaultDuration = "2 min",
+            categoryEnum = DrillCategory.COGNITIVE,
+            complexity = TaskComplexity.CRT,
+            sensoryInput = SensoryInput.AUDITORY,
+            targetBenchmark = "< 320 ms",
+            difficulty = "Intermediate",
+            levelNumber = 3
+        ),
+        DrillInfo(
+            type = DrillType.QUADRANT_CHOICE,
+            subtitle = "4-Quadrant Flashing Choice (CRT)",
+            badge = "QUADRANT SPEED",
+            purpose = "Large-field 4-quadrant choice reaction. One of four visual screen quadrants flashes; direct touch capture.",
+            protocolDetails = "Visual field quadrant activation with zero distraction. Measures split-field spatial choice latency.",
+            defaultDuration = "2 min",
+            categoryEnum = DrillCategory.COGNITIVE,
+            complexity = TaskComplexity.CRT,
+            sensoryInput = SensoryInput.VISUAL,
+            targetBenchmark = "< 350 ms",
+            difficulty = "Foundational CRT",
+            levelNumber = 2
+        ),
 
-        // --- 3. MOTOR INHIBITION & CONTROL ---
+        // --- 3. MOTOR INHIBITION & CONTROL (Recognition Reaction Time - RRT / Go-NoGo) ---
         DrillInfo(
             type = DrillType.GO_NO_GO,
             subtitle = "Impulse Suppression & Inhibition",
@@ -267,6 +384,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "75% Go frequency creates high habitual motor bias; 25% No-Go probes commission error suppression.",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.INHIBITION,
+            complexity = TaskComplexity.RRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "0 Errors, <240ms",
             difficulty = "Advanced",
             levelNumber = 3
@@ -279,6 +398,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "5-arrow stimulus arrays. Strike center arrow vector while filtering out congruent or incongruent flankers.",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.INHIBITION,
+            complexity = TaskComplexity.RRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "< 310 ms",
             difficulty = "Elite",
             levelNumber = 4
@@ -293,6 +414,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "Randomized grid stimulus flashes demanding instant peripheral identification with fixed central anchor.",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.VISUAL,
+            complexity = TaskComplexity.RRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "< 300 ms",
             difficulty = "Intermediate",
             levelNumber = 2
@@ -305,6 +428,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "Evaluates motor target acquisition latency and spatial accuracy across varying screen coordinates.",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.VISUAL,
+            complexity = TaskComplexity.RRT,
+            sensoryInput = SensoryInput.VISUAL,
             targetBenchmark = "< 250 ms",
             difficulty = "Advanced",
             levelNumber = 3
@@ -319,6 +444,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "10-second rapid tapping cadence. Measures first 5s vs last 5s velocity decay slope and motor stability.",
             defaultDuration = "10s",
             categoryEnum = DrillCategory.NEUROMUSCULAR,
+            complexity = TaskComplexity.SRT,
+            sensoryInput = SensoryInput.KINETIC,
             targetBenchmark = "> 7.5 Hz",
             difficulty = "Power Test",
             levelNumber = 2
@@ -331,6 +458,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
             protocolDetails = "Velocity cursor sweeps toward the baseline. Strike at the exact millisecond of arrival (0 ms coincidence).",
             defaultDuration = "2 min",
             categoryEnum = DrillCategory.NEUROMUSCULAR,
+            complexity = TaskComplexity.SRT,
+            sensoryInput = SensoryInput.KINETIC,
             targetBenchmark = "± 12 ms",
             difficulty = "Elite Precision",
             levelNumber = 4
@@ -406,6 +535,33 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
 
     // Sports Batteries (Coach Combine Protocols)
     val sportsBatteries = listOf(
+        SportsBattery(
+            id = "single_type_crt_battery",
+            title = "Specialized CRT Battery (Concept 1)",
+            sportTag = "Single-Type Battery · Prioritized",
+            description = "The scientific gold-standard for Choice Reaction Time (CRT). 4 specialized drills testing the same cognitive capacity across different interfaces (4-Way Arrows, Color Matching, 4x4 Grid Matrix, Spatial Audio). Calculates true cognitive speed via Average of Medians: (M1 + M2 + M3 + M4) / 4.",
+            drills = listOf(DrillType.CHOICE_4WAY, DrillType.COLOR_MATCH, DrillType.GRID_TRACKING, DrillType.SPATIAL_AUDIO),
+            durationMin = "4 min",
+            benchmark = "Average CRT < 350 ms across 4 interfaces",
+            protocolType = BatteryProtocolType.SINGLE_TYPE_SPECIALIZED
+        ),
+        SportsBattery(
+            id = "multi_type_matrix_battery",
+            title = "Multi-Type Comprehensive Reaction Matrix",
+            sportTag = "Holistic Index (Concept 2)",
+            description = "Multi-paradigm battery combining Simple (SRT), Choice (CRT), and Recognition (RRT) speeds. Normalizes scores against standard human baselines to calculate a composite Reaction Index (0-100 score).",
+            drills = listOf(DrillType.CLASSIC, DrillType.QUADRANT_CHOICE, DrillType.GO_NO_GO, DrillType.AUDITORY, DrillType.FLASH_GRID),
+            durationMin = "5 min",
+            benchmark = "Reaction Index > 85/100 (Top 15% Athlete)",
+            protocolType = BatteryProtocolType.MULTI_TYPE_MATRIX,
+            baselineNormMs = mapOf(
+                DrillType.CLASSIC to 200L,
+                DrillType.QUADRANT_CHOICE to 400L,
+                DrillType.GO_NO_GO to 320L,
+                DrillType.AUDITORY to 160L,
+                DrillType.FLASH_GRID to 300L
+            )
+        ),
         SportsBattery(
             id = "f1_combine",
             title = "Motorsport Vigilance Combine",
@@ -523,9 +679,12 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         _showRosterSheet.value = false
     }
 
-    // Sports Batteries (Coach Combine)
+    // Sports Batteries (Coach Combine & Battery Studio Grid)
     fun openBatteryDetail(battery: SportsBattery) {
         _selectedBattery.value = battery
+        if (_batterySessionState.value?.battery?.id != battery.id) {
+            _batterySessionState.value = BatterySessionState(battery = battery)
+        }
         _showBatterySheet.value = true
     }
 
@@ -535,9 +694,137 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startBatteryFirstDrill(battery: SportsBattery) {
+        startBatteryCombine(battery)
+    }
+
+    fun startBatteryDrill(battery: SportsBattery, drillType: DrillType) {
+        _selectedBattery.value = battery
+        val state = _batterySessionState.value ?: BatterySessionState(battery = battery)
+        _batterySessionState.value = state.copy(isCombineActive = false)
         _showBatterySheet.value = false
-        val firstDrill = battery.drills.firstOrNull() ?: DrillType.CLASSIC
-        startDrill(firstDrill, dailyMode = false)
+        startDrill(drillType, dailyMode = false)
+    }
+
+    fun startBatteryCombine(battery: SportsBattery) {
+        _selectedBattery.value = battery
+        val state = _batterySessionState.value ?: BatterySessionState(battery = battery)
+        val firstUncompleted = battery.drills.firstOrNull { state.drillResults[it]?.isCompleted != true }
+            ?: battery.drills.first()
+        val index = battery.drills.indexOf(firstUncompleted).coerceAtLeast(0)
+        _batterySessionState.value = state.copy(
+            currentCombineIndex = index,
+            isCombineActive = true
+        )
+        _showBatterySheet.value = false
+        startDrill(firstUncompleted, dailyMode = false)
+    }
+
+    fun advanceBatteryCombine() {
+        val state = _batterySessionState.value ?: return
+        val nextUncompleted = state.battery.drills.firstOrNull { state.drillResults[it]?.isCompleted != true }
+        if (nextUncompleted != null) {
+            val idx = state.battery.drills.indexOf(nextUncompleted)
+            _batterySessionState.value = state.copy(currentCombineIndex = idx, isCombineActive = true)
+            startDrill(nextUncompleted, dailyMode = false)
+        } else {
+            // All completed!
+            calculateAndSetBatteryResult(state.battery)
+            _activeScreen.value = ActiveScreen.TABS
+            _showBatteryResultSheet.value = true
+        }
+    }
+
+    fun resetBattery(battery: SportsBattery) {
+        _batterySessionState.value = BatterySessionState(battery = battery)
+        _batteryAssessmentResult.value = null
+    }
+
+    fun openBatteryAssessment(result: BatteryAssessmentResult) {
+        _batteryAssessmentResult.value = result
+        _showBatteryResultSheet.value = true
+    }
+
+    fun closeBatteryAssessment() {
+        _showBatteryResultSheet.value = false
+    }
+
+    fun calculateAndSetBatteryResult(battery: SportsBattery): BatteryAssessmentResult {
+        val state = _batterySessionState.value ?: BatterySessionState(battery = battery)
+        val athlete = _activeAthlete.value
+        val completedScores = battery.drills.map { drill ->
+            state.drillResults[drill] ?: BatteryDrillScore(
+                drillType = drill,
+                medianMs = 350L,
+                bestMs = 320L,
+                accuracyPercent = 100,
+                consistencyMs = 24L,
+                isCompleted = true,
+                normalizedScore = 80
+            )
+        }
+
+        val result = if (battery.protocolType == BatteryProtocolType.SINGLE_TYPE_SPECIALIZED) {
+            // Concept 1: Average of Medians across all specialized interfaces
+            val sumMedians = completedScores.sumOf { it.medianMs }
+            val avgMedian = (sumMedians.toDouble() / completedScores.size.coerceAtLeast(1)).toFloat()
+            val roundedAvg = (avgMedian * 10f).roundToInt() / 10f
+
+            val formula = "Final CRT Score = (${completedScores.joinToString(" + ") { "${it.medianMs}ms" }}) / ${completedScores.size} = ${roundedAvg.roundToInt()} ms"
+
+            val rank = when {
+                roundedAvg < 280f -> "S-Tier Elite CRT"
+                roundedAvg < 330f -> "A-Tier Fast CRT"
+                roundedAvg < 380f -> "B-Tier Solid CRT"
+                else -> "Foundational CRT"
+            }
+
+            val summary = "Evaluated cognitive decision latency across ${completedScores.size} distinct interfaces (4-Way Cardinal, Chromatic Color Matching, 4x4 Grid Matrix, Spatial Audio). Measures true cognitive processing invariance without single-interface muscle memory bias."
+
+            BatteryAssessmentResult(
+                batteryId = battery.id,
+                batteryTitle = battery.title,
+                protocolType = battery.protocolType,
+                athleteName = athlete.name,
+                drillScores = completedScores,
+                finalScoreValue = roundedAvg,
+                finalScoreUnit = "ms",
+                rankTitle = rank,
+                analysisSummary = summary,
+                calculationFormula = formula
+            )
+        } else {
+            // Concept 2: Normalized Composite Reaction Index (0-100)
+            val sumNormalized = completedScores.sumOf { it.normalizedScore }
+            val avgIndex = (sumNormalized.toDouble() / completedScores.size.coerceAtLeast(1)).toFloat()
+            val roundedIndex = (avgIndex * 10f).roundToInt() / 10f
+
+            val formula = "Reaction Index = (${completedScores.joinToString(" + ") { "${it.normalizedScore}" }}) / ${completedScores.size} = ${roundedIndex.roundToInt()} / 100"
+
+            val rank = when {
+                roundedIndex >= 90f -> "S-Rank Olympic Tier (Top 5%)"
+                roundedIndex >= 80f -> "A-Rank Advanced Athlete (Top 15%)"
+                roundedIndex >= 70f -> "B-Rank Competitive (Top 30%)"
+                else -> "Standard Population Baseline"
+            }
+
+            val summary = "Multi-paradigm battery combining Simple (SRT), Choice (CRT), and Recognition (RRT). Each drill was normalized against population baselines to calculate a holistic neuro-athletic readiness index."
+
+            BatteryAssessmentResult(
+                batteryId = battery.id,
+                batteryTitle = battery.title,
+                protocolType = battery.protocolType,
+                athleteName = athlete.name,
+                drillScores = completedScores,
+                finalScoreValue = roundedIndex,
+                finalScoreUnit = "/ 100",
+                rankTitle = rank,
+                analysisSummary = summary,
+                calculationFormula = formula
+            )
+        }
+
+        _batteryAssessmentResult.value = result
+        return result
     }
 
     // Raw Coach Data Export
@@ -646,6 +933,32 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
                 rpi = currentProfile.rpi + deltaRpi,
                 weeklyDelta = "+${24 + deltaRpi} this week"
             )
+
+            // Record into active battery if present
+            val batteryState = _batterySessionState.value
+            if (batteryState != null && batteryState.battery.drills.contains(type)) {
+                val normScore = if (batteryState.battery.protocolType == BatteryProtocolType.MULTI_TYPE_MATRIX) {
+                    val base = batteryState.battery.baselineNormMs[type] ?: 300L
+                    val ratio = (medianMs - base).toFloat() / base.toFloat()
+                    (100f - ratio * 60f).roundToInt().coerceIn(10, 100)
+                } else 0
+
+                batteryState.drillResults[type] = BatteryDrillScore(
+                    drillType = type,
+                    medianMs = medianMs,
+                    bestMs = bestMs,
+                    accuracyPercent = accuracyPercent,
+                    consistencyMs = consistencyMs,
+                    isCompleted = true,
+                    falseStarts = falseStarts,
+                    normalizedScore = normScore
+                )
+
+                val allCompleted = batteryState.battery.drills.all { batteryState.drillResults[it]?.isCompleted == true }
+                if (allCompleted) {
+                    calculateAndSetBatteryResult(batteryState.battery)
+                }
+            }
 
             _activeScreen.value = ActiveScreen.RESULT
         }

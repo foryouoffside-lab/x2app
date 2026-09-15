@@ -212,6 +212,23 @@ fun DrillTutorialOverlay(
                     coachSpeech = "Maintain your highest firing rate for ten consecutive seconds."
                 )
             )
+            DrillType.TACTILE -> listOf(
+                TutorialPhase(
+                    title = "Somatosensory Stance",
+                    instruction = "Hold your phone steady in your palm. Close eyes or look away.",
+                    coachSpeech = "Tactile reflex protocol. Hold your phone firmly and focus on physical touch."
+                ),
+                TutorialPhase(
+                    title = "Await Haptic Impulse",
+                    instruction = "The display remains neutral. Do not anticipate before feeling the vibration.",
+                    coachSpeech = "Screen stays completely dark. An unpredictable vibration pulse will occur."
+                ),
+                TutorialPhase(
+                    title = "Tactile Motor Burst",
+                    instruction = "The microsecond you feel the haptic pulse, strike the trigger pad!",
+                    coachSpeech = "Strike the screen the instant your skin mechanoreceptors feel the vibration."
+                )
+            )
             DrillType.F1_LIGHTS -> listOf(
                 TutorialPhase(
                     title = "Gantry Countdown",
@@ -295,6 +312,91 @@ fun DrillTutorialOverlay(
                     title = "Zero-Millisecond Hit",
                     instruction = "Tap at the exact millisecond the cursor meets the baseline (0 ms target).",
                     coachSpeech = "Strike at the exact millisecond of arrival. Strive for zero millisecond error."
+                )
+            )
+            DrillType.CHOICE_4WAY -> listOf(
+                TutorialPhase(
+                    title = "Directional Mapping",
+                    instruction = "Four cardinal directional vectors (UP, RIGHT, DOWN, LEFT) will be tested.",
+                    coachSpeech = "Prepare for 4-way choice reaction. Lock your thumb over the multi-directional pad."
+                ),
+                TutorialPhase(
+                    title = "Stimulus Recognition",
+                    instruction = "A prominent arrow and directional prompt will flash at randomized intervals.",
+                    coachSpeech = "An arrow stimulus will flash. Determine the cardinal direction without hesitation."
+                ),
+                TutorialPhase(
+                    title = "Motor Strike",
+                    instruction = "Strike the corresponding directional key with maximum decision velocity.",
+                    coachSpeech = "Strike the matching arrow button instantly."
+                )
+            )
+            DrillType.COLOR_MATCH -> listOf(
+                TutorialPhase(
+                    title = "Chromatic Priming",
+                    instruction = "Four hue targets (Red, Blue, Green, Amber) are positioned at the base.",
+                    coachSpeech = "Chromatic discrimination protocol. Four color targets are active."
+                ),
+                TutorialPhase(
+                    title = "Hue Perception",
+                    instruction = "A large color card flashes with randomized latency.",
+                    coachSpeech = "A color flash will appear. Identify the exact color instantly."
+                ),
+                TutorialPhase(
+                    title = "Target Selection",
+                    instruction = "Tap the matching color tile as quickly as humanly possible.",
+                    coachSpeech = "Tap the matching colored tile immediately."
+                )
+            )
+            DrillType.GRID_TRACKING -> listOf(
+                TutorialPhase(
+                    title = "Visual Field Fixation",
+                    instruction = "Fixate your eyes on the 4x4 matrix encompassing your peripheral vision.",
+                    coachSpeech = "Visual field tracking test. Fixate your vision across the 16-cell grid."
+                ),
+                TutorialPhase(
+                    title = "Target Acquisition",
+                    instruction = "One cell will illuminate with high-intensity cyan glow.",
+                    coachSpeech = "A target cell will illuminate unpredictably. Locate it with peripheral scanning."
+                ),
+                TutorialPhase(
+                    title = "Direct Screen Tap",
+                    instruction = "Tap the active illuminated cell directly on the grid matrix.",
+                    coachSpeech = "Tap directly onto the illuminated cell as rapidly as possible."
+                )
+            )
+            DrillType.SPATIAL_AUDIO -> listOf(
+                TutorialPhase(
+                    title = "Acoustic Priming",
+                    instruction = "Wear headphones or orient device speakers for stereo sound.",
+                    coachSpeech = "Acoustic spatial vector test. For best results, use headphones."
+                ),
+                TutorialPhase(
+                    title = "Binaural Perception",
+                    instruction = "A high-frequency tone will play in either the LEFT or RIGHT ear.",
+                    coachSpeech = "Listen closely. A tone will sound in either your left or right ear."
+                ),
+                TutorialPhase(
+                    title = "Ear Lateralization Strike",
+                    instruction = "Tap the LEFT EAR or RIGHT EAR trigger corresponding to the audio side.",
+                    coachSpeech = "Strike the corresponding left or right ear trigger pad immediately."
+                )
+            )
+            DrillType.QUADRANT_CHOICE -> listOf(
+                TutorialPhase(
+                    title = "Foveal Stance",
+                    instruction = "Focus your gaze at the center crosshair between all 4 quadrants.",
+                    coachSpeech = "Quadrant choice test. Focus your vision directly at the center crosshair."
+                ),
+                TutorialPhase(
+                    title = "Peripheral Detection",
+                    instruction = "One of the 4 quadrants (Top-Left, Top-Right, Bottom-Left, Bottom-Right) flashes.",
+                    coachSpeech = "One quadrant will illuminate brightly. Detect it using peripheral awareness."
+                ),
+                TutorialPhase(
+                    title = "Direct Quadrant Strike",
+                    instruction = "Strike the active quadrant directly on screen to record latency.",
+                    coachSpeech = "Tap the active quadrant directly on the screen."
                 )
             )
         }

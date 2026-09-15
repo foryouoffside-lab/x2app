@@ -20,9 +20,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.example.model.DrillType
+import com.example.ui.theme.BrandAccent
+import com.example.ui.theme.CoolBlue
+import com.example.ui.theme.CoralWarning
 import com.example.ui.theme.SignalAmber
 import com.example.ui.theme.SportGreen
 import com.example.ui.theme.VisionTeal
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.CharcoalCardElevated
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -443,6 +448,50 @@ fun DrillPreviewAnimation(
             }
         }
 
+        DrillType.TACTILE -> {
+            // Tactile Vibration: Haptic concentric shockwave bursts
+            val hapticPulse by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(900, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "tactile_pulse"
+            )
+
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val center = Offset(w * 0.5f, h * 0.5f)
+
+                // Concentric vibration shockwaves
+                for (ring in 1..3) {
+                    val progress = (hapticPulse + (ring * 0.25f)) % 1f
+                    val ringRadius = (w * 0.12f) + (w * 0.32f) * progress
+                    val ringAlpha = (1f - progress) * 0.7f
+                    drawCircle(
+                        color = SignalAmber.copy(alpha = ringAlpha),
+                        radius = ringRadius,
+                        center = center,
+                        style = Stroke(width = 2.dp.toPx())
+                    )
+                }
+
+                // Center device icon / haptic motor core
+                drawCircle(
+                    color = SignalAmber.copy(alpha = 0.25f),
+                    radius = w * 0.14f,
+                    center = center
+                )
+                drawCircle(
+                    color = SignalAmber,
+                    radius = w * 0.08f,
+                    center = center
+                )
+            }
+        }
+
         DrillType.F1_LIGHTS -> {
             // Formula 1 Gantry 5-Light Sequence
             val lightProgress by transition.animateFloat(
@@ -679,6 +728,204 @@ fun DrillPreviewAnimation(
                         color = SportGreen.copy(alpha = 0.4f),
                         radius = (w * 0.12f),
                         center = Offset(w * 0.5f, targetBaselineY)
+                    )
+                }
+            }
+        }
+
+        DrillType.CHOICE_4WAY -> {
+            // 4 Cardinal Direction Arrows: sequential pulse through Up, Right, Down, Left
+            val arrowAnim by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(2200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "choice_4way_arrow"
+            )
+
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val activeIndex = arrowAnim.toInt() % 4
+                val center = Offset(w * 0.5f, h * 0.5f)
+                val dist = w * 0.28f
+
+                // 4 arrows: 0 = UP, 1 = RIGHT, 2 = DOWN, 3 = LEFT
+                val offsets = listOf(
+                    Offset(center.x, center.y - dist),
+                    Offset(center.x + dist, center.y),
+                    Offset(center.x, center.y + dist),
+                    Offset(center.x - dist, center.y)
+                )
+
+                offsets.forEachIndexed { idx, pt ->
+                    val isActive = idx == activeIndex
+                    val col = if (isActive) BrandAccent else VisionTeal.copy(alpha = 0.3f)
+                    val rad = if (isActive) (w * 0.11f) else (w * 0.08f)
+                    drawCircle(color = col, radius = rad, center = pt)
+                }
+
+                // Center indicator dot
+                drawCircle(color = VisionTeal.copy(alpha = 0.6f), radius = w * 0.04f, center = center)
+            }
+        }
+
+        DrillType.COLOR_MATCH -> {
+            // Color Matching Choice: 4 colored squares in 2x2 layout, one highlighted in rotation
+            val colorPhase by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(2000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "color_match_phase"
+            )
+
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val activeIdx = colorPhase.toInt() % 4
+                val colors = listOf(CoralWarning, CoolBlue, SportGreen, SignalAmber)
+                val pad = w * 0.12f
+                val cellSize = w * 0.32f
+
+                val positions = listOf(
+                    Offset(pad, pad),
+                    Offset(w - pad - cellSize, pad),
+                    Offset(pad, h - pad - cellSize),
+                    Offset(w - pad - cellSize, h - pad - cellSize)
+                )
+
+                positions.forEachIndexed { i, pos ->
+                    val isActive = i == activeIdx
+                    drawRoundRect(
+                        color = if (isActive) colors[i] else colors[i].copy(alpha = 0.35f),
+                        topLeft = pos,
+                        size = Size(cellSize, cellSize),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                    )
+                }
+            }
+        }
+
+        DrillType.GRID_TRACKING -> {
+            // 4x4 Grid Matrix Tracking: 16 cells with target pulse traveling across the grid
+            val gridCellAnim by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 16f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(2400, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "grid_tracking_anim"
+            )
+
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val activeCell = gridCellAnim.toInt() % 16
+                val pad = w * 0.08f
+                val cellSize = (w - pad * 2f) / 4.4f
+                val spacing = (w - pad * 2f - cellSize * 4f) / 3f
+
+                for (row in 0..3) {
+                    for (col in 0..3) {
+                        val index = row * 4 + col
+                        val x = pad + col * (cellSize + spacing)
+                        val y = pad + row * (cellSize + spacing)
+                        val isActive = index == activeCell
+                        drawRoundRect(
+                            color = if (isActive) BrandAccent else VisionTeal.copy(alpha = 0.2f),
+                            topLeft = Offset(x, y),
+                            size = Size(cellSize, cellSize),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                        )
+                    }
+                }
+            }
+        }
+
+        DrillType.SPATIAL_AUDIO -> {
+            // Binaural earbud acoustic impulse: Left ear waves, then Right ear waves
+            val earWave by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "spatial_audio_wave"
+            )
+
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val isLeftActive = earWave < 0.5f
+                val waveProg = if (isLeftActive) earWave * 2f else (earWave - 0.5f) * 2f
+
+                // Left earbud representation
+                val leftCenter = Offset(w * 0.25f, h * 0.5f)
+                drawCircle(
+                    color = if (isLeftActive) VisionTeal else TextMuted.copy(alpha = 0.3f),
+                    radius = w * 0.1f,
+                    center = leftCenter
+                )
+
+                // Right earbud representation
+                val rightCenter = Offset(w * 0.75f, h * 0.5f)
+                drawCircle(
+                    color = if (!isLeftActive) VisionTeal else TextMuted.copy(alpha = 0.3f),
+                    radius = w * 0.1f,
+                    center = rightCenter
+                )
+
+                // Acoustic sound wave radiating from active earbud
+                val activeCenter = if (isLeftActive) leftCenter else rightCenter
+                drawCircle(
+                    color = VisionTeal.copy(alpha = 1f - waveProg),
+                    radius = (w * 0.12f) + (w * 0.16f * waveProg),
+                    center = activeCenter,
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            }
+        }
+
+        DrillType.QUADRANT_CHOICE -> {
+            // 4-Quadrant Flashing Choice: 2x2 quadrants where one quadrant flashes
+            val quadrantAnim by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1800, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "quadrant_anim"
+            )
+
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val activeQuad = quadrantAnim.toInt() % 4
+                val halfW = (w - 6.dp.toPx()) / 2f
+                val halfH = (h - 6.dp.toPx()) / 2f
+
+                val coords = listOf(
+                    Offset(0f, 0f),
+                    Offset(w - halfW, 0f),
+                    Offset(0f, h - halfH),
+                    Offset(w - halfW, h - halfH)
+                )
+
+                coords.forEachIndexed { i, pt ->
+                    val isActive = i == activeQuad
+                    drawRoundRect(
+                        color = if (isActive) VisionTeal else CharcoalCardElevated,
+                        topLeft = pt,
+                        size = Size(halfW, halfH),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx(), 6.dp.toPx())
                     )
                 }
             }

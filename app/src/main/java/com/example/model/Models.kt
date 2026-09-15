@@ -1,5 +1,28 @@
 package com.example.model
 
+enum class TaskComplexity(
+    val id: String,
+    val title: String,
+    val code: String,
+    val description: String,
+    val typicalBenchmark: String
+) {
+    SRT("srt", "Simple Reaction Time", "SRT", "One stimulus requiring one fixed response (e.g. launching at starting gun)", "140–250 ms"),
+    CRT("crt", "Choice Reaction Time", "CRT", "Multiple different stimuli, each requiring a specific response", "350–500+ ms"),
+    RRT("rrt", "Recognition Reaction Time", "RRT", "Respond only to specific target and ignore distractors (Go/No-Go)", "200–350 ms")
+}
+
+enum class SensoryInput(
+    val id: String,
+    val title: String,
+    val description: String
+) {
+    AUDITORY("auditory", "Auditory Speed", "Triggered by sound waves; fastest natural conduction pathway"),
+    VISUAL("visual", "Visual Speed", "Triggered by sight or light changes in retina"),
+    TACTILE("tactile", "Tactile Speed", "Triggered by physical touch, pressure, or vibration"),
+    KINETIC("kinetic", "Neuromuscular Cadence", "Triggered by internal rhythm, cadence, or motor output")
+}
+
 enum class DrillCategory(
     val id: String,
     val title: String,
@@ -17,6 +40,7 @@ enum class DrillCategory(
 enum class DrillType(val id: String, val title: String, val category: String) {
     CLASSIC("classic", "Visual Reflex", "Sensory Reflex"),
     AUDITORY("auditory", "Acoustic Reflex", "Sensory Reflex"),
+    TACTILE("tactile", "Tactile Vibration", "Sensory Reflex"),
     F1_LIGHTS("f1_lights", "F1 Start Lights", "Sensory Reflex"),
     CHOICE("choice", "Directional Choice", "Cognitive Decision"),
     STROOP("stroop", "Stroop Color Conflict", "Cognitive Decision"),
@@ -26,7 +50,23 @@ enum class DrillType(val id: String, val title: String, val category: String) {
     FLASH_GRID("flash_grid", "Peripheral Flash Grid", "Visual & Peripheral"),
     PRECISION("precision", "Saccadic Precision", "Visual & Peripheral"),
     CNS_TAP("cns_tap", "10s CNS Tap Test", "Neuromuscular"),
-    RHYTHM_SYNC("rhythm_sync", "Anticipation Timing", "Neuromuscular")
+    RHYTHM_SYNC("rhythm_sync", "Anticipation Timing", "Neuromuscular"),
+    CHOICE_4WAY("choice_4way", "4-Way Arrow Vectors", "Cognitive Decision"),
+    COLOR_MATCH("color_match", "Color Matching Choice", "Cognitive Decision"),
+    GRID_TRACKING("grid_tracking", "4x4 Grid Matrix Tracking", "Cognitive Decision"),
+    SPATIAL_AUDIO("spatial_audio", "Spatial Audio Earbud Vector", "Cognitive Decision"),
+    QUADRANT_CHOICE("quadrant_choice", "4-Quadrant Flashing Choice", "Cognitive Decision")
+}
+
+enum class DrillState {
+    STANDBY,
+    WAITING_FOR_STIMULUS,
+    STIMULUS_ACTIVE,
+    TOO_SOON,
+    FALSE_START,
+    TRIAL_FEEDBACK,
+    PAUSED,
+    FINISHED
 }
 
 data class DrillInfo(
@@ -35,8 +75,10 @@ data class DrillInfo(
     val badge: String,
     val purpose: String,
     val protocolDetails: String = "",
-    val defaultDuration: String = "5 min",
+    val defaultDuration: String = "2 min",
     val categoryEnum: DrillCategory = DrillCategory.SENSORY,
+    val complexity: TaskComplexity = TaskComplexity.SRT,
+    val sensoryInput: SensoryInput = SensoryInput.VISUAL,
     val targetBenchmark: String = "< 200 ms",
     val difficulty: String = "Intermediate",
     val levelNumber: Int = 1
@@ -87,6 +129,36 @@ data class AthleteProfile(
     val isActive: Boolean = false
 )
 
+enum class BatteryProtocolType {
+    SINGLE_TYPE_SPECIALIZED, // Concept 1: Specialized CRT Battery (Average of Medians across multiple layouts)
+    MULTI_TYPE_MATRIX        // Concept 2: Multi-Type Matrix (Normalized composite Reaction Index)
+}
+
+data class BatteryDrillScore(
+    val drillType: DrillType,
+    val medianMs: Long = 0L,
+    val bestMs: Long = 0L,
+    val accuracyPercent: Int = 100,
+    val consistencyMs: Long = 0L,
+    val isCompleted: Boolean = false,
+    val falseStarts: Int = 0,
+    val normalizedScore: Int = 0
+)
+
+data class BatteryAssessmentResult(
+    val batteryId: String,
+    val batteryTitle: String,
+    val protocolType: BatteryProtocolType,
+    val athleteName: String,
+    val drillScores: List<BatteryDrillScore>,
+    val finalScoreValue: Float, // ms for Single-Type, 0-100 score for Multi-Type
+    val finalScoreUnit: String, // "ms" or "/ 100"
+    val rankTitle: String,
+    val analysisSummary: String,
+    val calculationFormula: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 data class SportsBattery(
     val id: String,
     val title: String,
@@ -94,7 +166,9 @@ data class SportsBattery(
     val description: String,
     val drills: List<DrillType>,
     val durationMin: String,
-    val benchmark: String
+    val benchmark: String,
+    val protocolType: BatteryProtocolType = BatteryProtocolType.SINGLE_TYPE_SPECIALIZED,
+    val baselineNormMs: Map<DrillType, Long> = emptyMap()
 )
 
 data class LeaderboardPlayer(

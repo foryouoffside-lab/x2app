@@ -32,10 +32,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
@@ -75,6 +80,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.DrillState
 import com.example.model.DrillType
 import com.example.model.TrialRecord
 import com.example.ui.components.DrillTutorialOverlay
@@ -97,17 +103,6 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
-
-private enum class DrillState {
-    STANDBY,
-    WAITING_FOR_STIMULUS,
-    STIMULUS_ACTIVE,
-    TOO_SOON,
-    FALSE_START,
-    TRIAL_FEEDBACK,
-    PAUSED,
-    FINISHED
-}
 
 @Composable
 fun ActiveDrillScreen(
@@ -171,6 +166,42 @@ fun ActiveDrillScreen(
     var cnsSecondHalfTaps by remember { mutableIntStateOf(0) }
     var isCnsRunning by remember { mutableStateOf(false) }
 
+    // F1 Lights state (0 to 5 lights lit)
+    var f1LitCount by remember { mutableIntStateOf(0) }
+
+    // Stroop state
+    val stroopColors = remember { listOf("RED", "GREEN", "BLUE", "AMBER") }
+    val stroopColorValues = remember { listOf(CoralWarning, SportGreen, CoolBlue, SignalAmber) }
+    var stroopWord by remember { mutableStateOf("RED") }
+    var stroopColorIndex by remember { mutableIntStateOf(0) }
+
+    // Even-Odd state
+    var evenOddNumber by remember { mutableIntStateOf(42) }
+
+    // Flanker state
+    var flankerCenterRight by remember { mutableStateOf(true) }
+    var flankerCongruent by remember { mutableStateOf(false) }
+
+    // Rhythm Sync state
+    var rhythmTargetHitTime by remember { mutableLongStateOf(0L) }
+
+    // 4-Way Arrow state (0 = UP, 1 = RIGHT, 2 = DOWN, 3 = LEFT)
+    var choice4WayDirection by remember { mutableIntStateOf(0) }
+
+    // Color Match state (0 = RED, 1 = BLUE, 2 = GREEN, 3 = AMBER)
+    val matchColorNames = remember { listOf("RED", "BLUE", "GREEN", "AMBER") }
+    val matchColorValues = remember { listOf(CoralWarning, CoolBlue, SportGreen, SignalAmber) }
+    var colorMatchIndex by remember { mutableIntStateOf(0) }
+
+    // 4x4 Grid Matrix Tracking state (0 to 15)
+    var gridTrackingTargetIndex by remember { mutableIntStateOf(0) }
+
+    // Spatial Audio state (0 = LEFT, 1 = RIGHT)
+    var spatialAudioChannel by remember { mutableIntStateOf(0) }
+
+    // 4-Quadrant Flashing Choice state (0 = TL, 1 = TR, 2 = BL, 3 = BR)
+    var activeQuadrantIndex by remember { mutableIntStateOf(0) }
+
     fun triggerHaptic(strong: Boolean = false) {
         if (!hapticsEnabled) return
         try {
@@ -196,6 +227,15 @@ fun ActiveDrillScreen(
         try {
             val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
             toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 130)
+        } catch (_: Exception) {}
+    }
+
+    fun playSpatialTone(isLeft: Boolean) {
+        if (!soundEnabled) return
+        try {
+            val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+            val tone = if (isLeft) ToneGenerator.TONE_PROP_BEEP else ToneGenerator.TONE_PROP_BEEP2
+            toneGen.startTone(tone, 150)
         } catch (_: Exception) {}
     }
 
@@ -280,6 +320,38 @@ fun ActiveDrillScreen(
     LaunchedEffect(currentTrial, drillState) {
         if (drillType == DrillType.CNS_TAP) return@LaunchedEffect
 
+        // Special handling for Formula 1 Lights (Sequential gantry illumination)
+        if (drillType == DrillType.F1_LIGHTS && drillState == DrillState.WAITING_FOR_STIMULUS) {
+            f1LitCount = 0
+            delay(600L)
+            for (step in 1..5) {
+                if (drillState != DrillState.WAITING_FOR_STIMULUS) return@LaunchedEffect
+                f1LitCount = step
+                delay(600L)
+            }
+            // All 5 lights lit: hold for unpredictable FIA jitter (800ms - 2400ms)
+            delay(Random.nextLong(800L, 2400L))
+            if (drillState == DrillState.WAITING_FOR_STIMULUS) {
+                f1LitCount = 0 // LIGHTS OUT!
+                stimulusStartTime = SystemClock.uptimeMillis()
+                drillState = DrillState.STIMULUS_ACTIVE
+                triggerHaptic(false)
+            }
+            return@LaunchedEffect
+        }
+
+        // Special handling for Rhythm Sync
+        if (drillType == DrillType.RHYTHM_SYNC && drillState == DrillState.WAITING_FOR_STIMULUS) {
+            delay(900L)
+            if (drillState == DrillState.WAITING_FOR_STIMULUS) {
+                val targetDurationMs = 1400L
+                rhythmTargetHitTime = SystemClock.uptimeMillis() + targetDurationMs
+                stimulusStartTime = rhythmTargetHitTime
+                drillState = DrillState.STIMULUS_ACTIVE
+            }
+            return@LaunchedEffect
+        }
+
         if (drillState == DrillState.WAITING_FOR_STIMULUS) {
             // Random foreperiod delay between 1.6s and 3.9s (Standard psychometric jitter)
             val delayMs = Random.nextLong(1600L, 3900L)
@@ -293,8 +365,27 @@ fun ActiveDrillScreen(
                     DrillType.AUDITORY -> {
                         playAudioTone()
                     }
+                    DrillType.TACTILE -> {
+                        triggerHaptic(true)
+                    }
                     DrillType.CHOICE -> {
                         choiceTargetDirection = Random.nextInt(2) // 0 or 1
+                    }
+                    DrillType.STROOP -> {
+                        stroopWord = stroopColors.random()
+                        val isConflict = Random.nextFloat() < 0.70f
+                        stroopColorIndex = if (isConflict) {
+                            (0..3).filter { stroopColors[it] != stroopWord }.random()
+                        } else {
+                            stroopColors.indexOf(stroopWord)
+                        }
+                    }
+                    DrillType.EVEN_ODD -> {
+                        evenOddNumber = Random.nextInt(1, 99)
+                    }
+                    DrillType.FLANKER -> {
+                        flankerCenterRight = Random.nextBoolean()
+                        flankerCongruent = Random.nextBoolean()
                     }
                     DrillType.FLASH_GRID -> {
                         activeGridIndex = Random.nextInt(9) // 0 to 8
@@ -303,12 +394,29 @@ fun ActiveDrillScreen(
                         precisionTargetX = Random.nextFloat().coerceIn(0.15f, 0.85f)
                         precisionTargetY = Random.nextFloat().coerceIn(0.2f, 0.7f)
                     }
-                    DrillType.CLASSIC -> {}
-                    DrillType.CNS_TAP -> {}
+                    DrillType.CHOICE_4WAY -> {
+                        choice4WayDirection = Random.nextInt(4) // 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
+                    }
+                    DrillType.COLOR_MATCH -> {
+                        colorMatchIndex = Random.nextInt(4) // 0=RED, 1=BLUE, 2=GREEN, 3=AMBER
+                    }
+                    DrillType.GRID_TRACKING -> {
+                        gridTrackingTargetIndex = Random.nextInt(16) // 0 to 15
+                    }
+                    DrillType.SPATIAL_AUDIO -> {
+                        spatialAudioChannel = Random.nextInt(2) // 0=LEFT, 1=RIGHT
+                        playSpatialTone(spatialAudioChannel == 0)
+                    }
+                    DrillType.QUADRANT_CHOICE -> {
+                        activeQuadrantIndex = Random.nextInt(4) // 0 to 3
+                    }
+                    DrillType.CLASSIC, DrillType.CNS_TAP, DrillType.F1_LIGHTS, DrillType.RHYTHM_SYNC -> {}
                 }
                 stimulusStartTime = SystemClock.uptimeMillis()
                 drillState = DrillState.STIMULUS_ACTIVE
-                triggerHaptic(false)
+                if (drillType != DrillType.TACTILE) {
+                    triggerHaptic(false)
+                }
 
                 // For Go/No-Go: If stimulus is NO-GO, wait 1250ms for athlete to successfully withhold
                 if (drillType == DrillType.GO_NO_GO && !isGoStimulus) {
@@ -413,13 +521,22 @@ fun ActiveDrillScreen(
         lastFeedbackMsg = "$elapsed ms"
         if (isCorrect) correctCount++ else errorCount++
 
+        val stimInfo = when (drillType) {
+            DrillType.CHOICE_4WAY -> "4-Way Arrow: ${listOf("UP", "RIGHT", "DOWN", "LEFT").getOrElse(choice4WayDirection) { "UP" }}"
+            DrillType.COLOR_MATCH -> "Color: ${matchColorNames.getOrElse(colorMatchIndex) { "RED" }}"
+            DrillType.GRID_TRACKING -> "Grid Matrix: Cell #$gridTrackingTargetIndex"
+            DrillType.SPATIAL_AUDIO -> "Spatial Audio: ${if (spatialAudioChannel == 0) "LEFT EAR" else "RIGHT EAR"}"
+            DrillType.QUADRANT_CHOICE -> "Quadrant: ${listOf("Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right").getOrElse(activeQuadrantIndex) { "Top-Left" }}"
+            else -> "${drillType.title} Stimulus"
+        }
+
         recordedTrials.add(
             TrialRecord(
                 trialIndex = currentTrial,
                 latencyMs = elapsed,
                 isCorrect = isCorrect,
                 isFalseStart = false,
-                stimulusInfo = "${drillType.title} Stimulus"
+                stimulusInfo = stimInfo
             )
         )
 
@@ -639,7 +756,8 @@ fun ActiveDrillScreen(
                                     val change = event.changes.firstOrNull()
                                     val hwTime = change?.uptimeMillis ?: SystemClock.uptimeMillis()
                                     when (drillType) {
-                                        DrillType.CLASSIC, DrillType.AUDITORY, DrillType.GO_NO_GO -> {
+                                        DrillType.CLASSIC, DrillType.AUDITORY, DrillType.GO_NO_GO,
+                                        DrillType.TACTILE, DrillType.F1_LIGHTS, DrillType.RHYTHM_SYNC -> {
                                             if (drillState == DrillState.WAITING_FOR_STIMULUS) {
                                                 change?.consume()
                                                 handleEarlyTap()
@@ -656,627 +774,76 @@ fun ActiveDrillScreen(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                when (drillType) {
-                    // --- 1. CLASSIC VISUAL SRT ---
-                    DrillType.CLASSIC -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            when (drillState) {
-                                DrillState.WAITING_FOR_STIMULUS -> {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(90.dp)
-                                            .background(CharcoalCard, CircleShape)
-                                            .border(2.dp, BorderSubtle, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("WAIT", color = TextMuted, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Fixate gaze... tap immediately upon flash", color = TextMuted, fontSize = 13.sp)
-                                }
-                                DrillState.STIMULUS_ACTIVE -> {
-                                    Text(
-                                        text = "TAP NOW!",
-                                        color = TextInverse,
-                                        fontSize = 38.sp,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                }
-                                DrillState.TOO_SOON, DrillState.FALSE_START -> {
-                                    Button(
-                                        onClick = { startNextTrial() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = AmberAlert, contentColor = DarkBackground),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Reset Trial", fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                DrillState.TRIAL_FEEDBACK -> {
-                                    Text(
-                                        text = "$lastFeedbackMs ms",
-                                        color = BrandAccent,
-                                        fontSize = 46.sp,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Button(
-                                        onClick = {
-                                            currentTrial++
-                                            startNextTrial()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Next Trial", fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                else -> {}
-                            }
-                        }
-                    }
-
-                    // --- 2. GO / NO-GO INHIBITION ---
-                    DrillType.GO_NO_GO -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            when (drillState) {
-                                DrillState.WAITING_FOR_STIMULUS -> {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(90.dp)
-                                            .background(CharcoalCard, CircleShape)
-                                            .border(2.dp, BorderSubtle, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("READY", color = TextMuted, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("STRIKE Green / HOLD Red", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Evaluates prefrontal impulse suppression", color = TextSubtle, fontSize = 12.sp)
-                                }
-                                DrillState.STIMULUS_ACTIVE -> {
-                                    if (isGoStimulus) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = TextInverse, modifier = Modifier.size(80.dp))
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            Text("GO! STRIKE!", color = TextInverse, fontSize = 36.sp, fontWeight = FontWeight.Black)
-                                        }
-                                    } else {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(imageVector = Icons.Default.Block, contentDescription = null, tint = TextInverse, modifier = Modifier.size(80.dp))
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            Text("NO-GO! HOLD!", color = TextInverse, fontSize = 34.sp, fontWeight = FontWeight.Black)
-                                            Text("Withhold tap for 1.2 seconds", color = TextInverse.copy(alpha = 0.8f), fontSize = 13.sp)
-                                        }
-                                    }
-                                }
-                                DrillState.TOO_SOON -> {
-                                    Button(
-                                        onClick = { startNextTrial() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = AmberAlert, contentColor = DarkBackground),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Reset Trial", fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                DrillState.TRIAL_FEEDBACK -> {
-                                    Text(
-                                        text = lastFeedbackMsg,
-                                        color = if (lastFeedbackMsg.contains("Error")) CoralWarning else SportGreen,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Black,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Button(
-                                        onClick = {
-                                            currentTrial++
-                                            startNextTrial()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Next Trial", fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                else -> {}
-                            }
-                        }
-                    }
-
-                    // --- 3. AUDITORY STARTER REFLEX ---
-                    DrillType.AUDITORY -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            when (drillState) {
-                                DrillState.WAITING_FOR_STIMULUS -> {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(100.dp)
-                                            .background(CharcoalCard, CircleShape)
-                                            .border(2.dp, BorderSubtle, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(48.dp))
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Awaiting Starter Tone...", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Screen stays neutral. Tap anywhere on tone.", color = TextSubtle, fontSize = 12.sp)
-                                }
-                                DrillState.STIMULUS_ACTIVE -> {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(120.dp)
-                                            .background(CoolBlue.copy(alpha = 0.2f), CircleShape)
-                                            .border(3.dp, CoolBlue, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(imageVector = Icons.Default.GraphicEq, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(64.dp))
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("TONE ACTIVE — TAP!", color = CoolBlue, fontSize = 28.sp, fontWeight = FontWeight.Black)
-                                }
-                                DrillState.TOO_SOON, DrillState.FALSE_START -> {
-                                    Button(
-                                        onClick = { startNextTrial() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = AmberAlert, contentColor = DarkBackground),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Reset", fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                DrillState.TRIAL_FEEDBACK -> {
-                                    Text(
-                                        text = "$lastFeedbackMs ms",
-                                        color = CoolBlue,
-                                        fontSize = 44.sp,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = if (lastFeedbackMs < 165) "Elite Acoustic Conduction" else "Auditory Reflex Recorded",
-                                        color = TextMuted,
-                                        fontSize = 13.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Button(
-                                        onClick = {
-                                            currentTrial++
-                                            startNextTrial()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CoolBlue, contentColor = TextInverse),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Next Trial", fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                else -> {}
-                            }
-                        }
-                    }
-
-                    // --- 4. 10S CNS TAP READINESS TEST ---
-                    DrillType.CNS_TAP -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(24.dp)
-                        ) {
-                            if (!isCnsRunning && cnsTimeRemainingSec == 10) {
-                                Text(
-                                    text = "10s CNS Readiness Test",
-                                    color = TextPrimary,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Tap the circular pad as rapidly as possible for 10 seconds. Quantifies central nervous system fatigue and motor velocity.",
-                                    color = TextMuted,
-                                    fontSize = 13.sp,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(32.dp))
-                                Button(
-                                    onClick = { isCnsRunning = true },
-                                    colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.height(56.dp).fillMaxWidth(0.7f)
-                                ) {
-                                    Text("START 10s TEST", fontWeight = FontWeight.Black, fontSize = 16.sp)
-                                }
-                            } else {
-                                // Active 10-second countdown and tap counter
-                                Text(
-                                    text = "00:0$cnsTimeRemainingSec",
-                                    color = if (cnsTimeRemainingSec <= 3) CoralWarning else BrandAccent,
-                                    fontSize = 44.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                val currentHz = if (10 - cnsTimeRemainingSec > 0) {
-                                    (cnsTapCount.toFloat() / (10 - cnsTimeRemainingSec).toFloat() * 10f).roundToInt() / 10f
-                                } else 0f
-                                Text(
-                                    text = "$cnsTapCount Taps (${currentHz} Hz)",
-                                    color = TextPrimary,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(24.dp))
-
-                                // Massive High-Frequency Tapping Pad (Hardware Press Detection)
-                                Box(
-                                    modifier = Modifier
-                                        .size(200.dp)
-                                        .clip(CircleShape)
-                                        .background(CharcoalCardElevated)
-                                        .border(3.dp, BrandAccent, CircleShape)
-                                        .pointerInput(isCnsRunning) {
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                    if (event.type == PointerEventType.Press) {
-                                                        event.changes.firstOrNull()?.consume()
-                                                        if (isCnsRunning) {
-                                                            cnsTapCount++
-                                                            triggerHaptic(false)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(imageVector = Icons.Default.TouchApp, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(48.dp))
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text("TAP FAST!", color = TextPrimary, fontWeight = FontWeight.Black, fontSize = 16.sp)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // --- 5. CHOICE REACTION CRT ---
-                    DrillType.CHOICE -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            if (drillState == DrillState.WAITING_FOR_STIMULUS) {
-                                Text("Prepare for directional vector...", color = TextMuted, fontSize = 14.sp)
-                            } else if (drillState == DrillState.STIMULUS_ACTIVE) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(120.dp)
-                                        .background(CharcoalCardElevated, CircleShape)
-                                        .border(2.dp, BrandAccent, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (choiceTargetDirection == 0) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        tint = BrandAccent,
-                                        modifier = Modifier.size(64.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = if (choiceTargetDirection == 0) "STRIKE LEFT" else "STRIKE RIGHT",
-                                    color = BrandAccent,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                            } else if (drillState == DrillState.TRIAL_FEEDBACK) {
-                                Text(
-                                    text = "$lastFeedbackMs ms",
-                                    color = BrandAccent,
-                                    fontSize = 42.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = {
-                                        currentTrial++
-                                        startNextTrial()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Next Trial", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-
-                    // --- 6. SACCADIC PRECISION ---
-                    DrillType.PRECISION -> {
-                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            if (drillState == DrillState.STIMULUS_ACTIVE) {
-                                val targetSize = 64.dp
-                                val posX = (maxWidth - targetSize) * precisionTargetX
-                                val posY = (maxHeight - targetSize) * precisionTargetY
-
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = posX, y = posY)
-                                        .size(targetSize)
-                                        .clip(CircleShape)
-                                        .background(BrandAccent)
-                                        .border(3.dp, DarkBackground, CircleShape)
-                                        .pointerInput(drillState) {
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                    if (event.type == PointerEventType.Press) {
-                                                        val change = event.changes.firstOrNull()
-                                                        val hwTime = change?.uptimeMillis ?: SystemClock.uptimeMillis()
-                                                        change?.consume()
-                                                        handleValidResponse(isCorrect = true, hardwareEventTime = hwTime)
-                                                    }
-                                                }
-                                            }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .background(DarkBackground, CircleShape)
-                                    )
-                                }
-                            } else if (drillState == DrillState.WAITING_FOR_STIMULUS) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("Track parafoveal target...", color = TextMuted, fontSize = 14.sp)
-                                }
-                            } else if (drillState == DrillState.TRIAL_FEEDBACK) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("$lastFeedbackMs ms", color = BrandAccent, fontSize = 42.sp, fontWeight = FontWeight.Black)
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Button(
-                                            onClick = {
-                                                currentTrial++
-                                                startNextTrial()
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Next Trial", fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // --- 7. PERIPHERAL FLASH GRID ---
-                    DrillType.FLASH_GRID -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            if (drillState == DrillState.TRIAL_FEEDBACK) {
-                                Text("$lastFeedbackMs ms", color = BrandAccent, fontSize = 38.sp, fontWeight = FontWeight.Black)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = {
-                                        currentTrial++
-                                        startNextTrial()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Next Trial", fontWeight = FontWeight.Bold)
-                                }
-                                Spacer(modifier = Modifier.height(14.dp))
-                            }
-
-                            for (row in 0..2) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    for (col in 0..2) {
-                                        val index = row * 3 + col
-                                        val isFlashing = (drillState == DrillState.STIMULUS_ACTIVE) && (activeGridIndex == index)
-
-                                        Box(
-                                            modifier = Modifier
-                                                .size(72.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(if (isFlashing) BrandAccent else CharcoalCard)
-                                                .border(1.dp, if (isFlashing) BrandAccent else BorderSubtle, RoundedCornerShape(12.dp))
-                                                .pointerInput(drillState, isFlashing) {
-                                                    awaitPointerEventScope {
-                                                        while (true) {
-                                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                            if (event.type == PointerEventType.Press) {
-                                                                val change = event.changes.firstOrNull()
-                                                                val hwTime = change?.uptimeMillis ?: SystemClock.uptimeMillis()
-                                                                if (drillState == DrillState.WAITING_FOR_STIMULUS) {
-                                                                    change?.consume()
-                                                                    handleEarlyTap()
-                                                                } else if (drillState == DrillState.STIMULUS_ACTIVE) {
-                                                                    change?.consume()
-                                                                    handleValidResponse(isCorrect = isFlashing, hardwareEventTime = hwTime)
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (isFlashing) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(16.dp)
-                                                        .background(DarkBackground, CircleShape)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                ActiveDrillStimulusArea(
+                    drillType = drillType,
+                    drillState = drillState,
+                    lastFeedbackMs = lastFeedbackMs,
+                    lastFeedbackMsg = lastFeedbackMsg,
+                    currentTrial = currentTrial,
+                    isGoStimulus = isGoStimulus,
+                    choiceTargetDirection = choiceTargetDirection,
+                    isCnsRunning = isCnsRunning,
+                    cnsTapCount = cnsTapCount,
+                    cnsTimeRemainingSec = cnsTimeRemainingSec,
+                    precisionTargetX = precisionTargetX,
+                    precisionTargetY = precisionTargetY,
+                    activeGridIndex = activeGridIndex,
+                    f1LitCount = f1LitCount,
+                    stroopWord = stroopWord,
+                    stroopColorIndex = stroopColorIndex,
+                    stroopColorValues = stroopColorValues,
+                    evenOddNumber = evenOddNumber,
+                    flankerCenterRight = flankerCenterRight,
+                    flankerCongruent = flankerCongruent,
+                    choice4WayDirection = choice4WayDirection,
+                    matchColorNames = matchColorNames,
+                    matchColorValues = matchColorValues,
+                    colorMatchIndex = colorMatchIndex,
+                    gridTrackingTargetIndex = gridTrackingTargetIndex,
+                    spatialAudioChannel = spatialAudioChannel,
+                    activeQuadrantIndex = activeQuadrantIndex,
+                    onStartNextTrial = { startNextTrial() },
+                    onAdvanceTrial = {
+                        currentTrial++
+                        startNextTrial()
+                    },
+                    onStartCns = {
+                        isCnsRunning = true
+                        cnsTapCount = 0
+                        cnsTimeRemainingSec = 10
+                    },
+                    onCnsTap = { cnsTapCount++ },
+                    onValidResponse = { isCorrect, hwTime ->
+                        handleValidResponse(isCorrect = isCorrect, hardwareEventTime = hwTime)
+                    },
+                    onEarlyTap = { handleEarlyTap() },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             // 4. Ergonomic Lower Third Controls
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 20.dp)
-            ) {
-                when (drillType) {
-                    DrillType.CHOICE -> {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(68.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(CharcoalCardElevated)
-                                    .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                                    .pointerInput(drillState, choiceTargetDirection) {
-                                        awaitPointerEventScope {
-                                            while (true) {
-                                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                if (event.type == PointerEventType.Press) {
-                                                    val change = event.changes.firstOrNull()
-                                                    val hwTime = change?.uptimeMillis ?: SystemClock.uptimeMillis()
-                                                    if (drillState == DrillState.STIMULUS_ACTIVE) {
-                                                        change?.consume()
-                                                        handleValidResponse(isCorrect = (choiceTargetDirection == 0), hardwareEventTime = hwTime)
-                                                    } else if (drillState == DrillState.WAITING_FOR_STIMULUS) {
-                                                        change?.consume()
-                                                        handleEarlyTap()
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .testTag("choice_left_target"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(24.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("LEFT", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
-                                }
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(68.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(CharcoalCardElevated)
-                                    .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                                    .pointerInput(drillState, choiceTargetDirection) {
-                                        awaitPointerEventScope {
-                                            while (true) {
-                                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                if (event.type == PointerEventType.Press) {
-                                                    val change = event.changes.firstOrNull()
-                                                    val hwTime = change?.uptimeMillis ?: SystemClock.uptimeMillis()
-                                                    if (drillState == DrillState.STIMULUS_ACTIVE) {
-                                                        change?.consume()
-                                                        handleValidResponse(isCorrect = (choiceTargetDirection == 1), hardwareEventTime = hwTime)
-                                                    } else if (drillState == DrillState.WAITING_FOR_STIMULUS) {
-                                                        change?.consume()
-                                                        handleEarlyTap()
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .testTag("choice_right_target"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("RIGHT", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(24.dp))
-                                }
-                            }
-                        }
-                    }
-
-                    DrillType.CLASSIC, DrillType.AUDITORY, DrillType.GO_NO_GO -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (drillState == DrillState.STIMULUS_ACTIVE) BrandAccent else CharcoalCardElevated)
-                                .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                                .pointerInput(drillState) {
-                                    awaitPointerEventScope {
-                                        while (true) {
-                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                            if (event.type == PointerEventType.Press) {
-                                                val change = event.changes.firstOrNull()
-                                                val hwTime = change?.uptimeMillis ?: SystemClock.uptimeMillis()
-                                                if (drillState == DrillState.STIMULUS_ACTIVE) {
-                                                    change?.consume()
-                                                    handleValidResponse(isCorrect = true, hardwareEventTime = hwTime)
-                                                } else if (drillState == DrillState.WAITING_FOR_STIMULUS) {
-                                                    change?.consume()
-                                                    handleEarlyTap()
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                .testTag("primary_trigger_pad"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (drillState == DrillState.STIMULUS_ACTIVE) "TAP TRIGGER!" else "TACTILE RESPONSE ZONE",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black,
-                                color = if (drillState == DrillState.STIMULUS_ACTIVE) TextInverse else TextPrimary
-                            )
-                        }
-                    }
-
-                    else -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(CharcoalCard, RoundedCornerShape(12.dp))
-                                .padding(12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Distraction-free reflex capture active · 120Hz Vsync locked",
-                                color = TextSubtle,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            }
+            ActiveDrillControlViews(
+                drillType = drillType,
+                drillState = drillState,
+                choiceTargetDirection = choiceTargetDirection,
+                stroopColors = stroopColors,
+                stroopColorValues = stroopColorValues,
+                stroopColorIndex = stroopColorIndex,
+                evenOddNumber = evenOddNumber,
+                flankerCenterRight = flankerCenterRight,
+                choice4WayDirection = choice4WayDirection,
+                matchColorNames = matchColorNames,
+                matchColorValues = matchColorValues,
+                colorMatchIndex = colorMatchIndex,
+                spatialAudioChannel = spatialAudioChannel,
+                onValidResponse = { isCorrect, hwTime ->
+                    handleValidResponse(isCorrect = isCorrect, hardwareEventTime = hwTime)
+                },
+                onEarlyTap = { handleEarlyTap() }
+            )
         }
     }
-    }
+}
 
     // Confirm Exit Sheet (Protects unfinished run)
     if (showExitConfirmSheet) {

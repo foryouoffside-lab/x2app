@@ -47,15 +47,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.DrillCategory
 import com.example.model.DrillInfo
 import com.example.model.DrillType
+import com.example.model.SensoryInput
 import com.example.model.SportsBattery
+import com.example.model.TaskComplexity
 import com.example.ui.components.DrillPreviewAnimation
 import com.example.ui.theme.BorderActive
 import com.example.ui.theme.BorderSubtle
@@ -90,12 +95,13 @@ fun TrainScreen(
     val filteredDrills = drills.filter { drill ->
         when (selectedFilter) {
             "All" -> true
-            "Visual" -> drill.type == DrillType.CLASSIC || drill.type == DrillType.FLASH_GRID
-            "Inhibition" -> drill.type == DrillType.GO_NO_GO
-            "Decision" -> drill.type == DrillType.CHOICE
-            "Precision" -> drill.type == DrillType.PRECISION
-            "Audio" -> drill.type == DrillType.AUDITORY
-            "Motor CNS" -> drill.type == DrillType.CNS_TAP
+            "SRT" -> drill.complexity == TaskComplexity.SRT
+            "CRT" -> drill.complexity == TaskComplexity.CRT
+            "RRT" -> drill.complexity == TaskComplexity.RRT
+            "Visual" -> drill.sensoryInput == SensoryInput.VISUAL
+            "Auditory" -> drill.sensoryInput == SensoryInput.AUDITORY
+            "Tactile" -> drill.sensoryInput == SensoryInput.TACTILE
+            "Motor" -> drill.categoryEnum == DrillCategory.NEUROMUSCULAR
             else -> true
         }
     }
@@ -141,12 +147,13 @@ fun TrainScreen(
         // 2. Filter chips (Horizontally scrollable with icons)
         val filterItems = listOf(
             "All" to Icons.Default.GridView,
+            "SRT" to Icons.Default.Bolt,
+            "CRT" to Icons.Default.AltRoute,
+            "RRT" to Icons.Default.Block,
             "Visual" to Icons.Default.Visibility,
-            "Inhibition" to Icons.Default.Block,
-            "Audio" to Icons.AutoMirrored.Filled.VolumeUp,
-            "Motor CNS" to Icons.Default.TouchApp,
-            "Decision" to Icons.Default.AltRoute,
-            "Precision" to Icons.Default.GpsFixed
+            "Auditory" to Icons.AutoMirrored.Filled.VolumeUp,
+            "Tactile" to Icons.Default.Vibration,
+            "Motor" to Icons.Default.TouchApp
         )
         Row(
             modifier = Modifier
@@ -235,27 +242,33 @@ fun TrainScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Text(
-                                text = drill.type.title,
-                                color = TextPrimary,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            // Timer below the drill name
-                            val timerText = when (drill.type) {
-                                DrillType.CLASSIC -> "01:00"
-                                DrillType.CHOICE -> "02:00"
-                                DrillType.GO_NO_GO -> "02:00"
-                                DrillType.AUDITORY -> "01:00"
-                                DrillType.CNS_TAP -> "00:10"
-                                DrillType.PRECISION -> "02:00"
-                                DrillType.FLASH_GRID -> "02:00"
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = drill.type.title,
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(BrandAccent.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = drill.complexity.code,
+                                        color = BrandAccent,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
                             }
+
+                            Spacer(modifier = Modifier.height(3.dp))
+
+                            val timerText = drill.defaultDuration
                             val trialsOrReps = if (drill.type == DrillType.CNS_TAP) "10s sprint" else "5 trials"
 
                             Row(
@@ -265,18 +278,29 @@ fun TrainScreen(
                                 Text(
                                     text = timerText,
                                     color = TextMuted,
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
                                     text = "·",
                                     color = TextSubtle,
-                                    fontSize = 13.sp
+                                    fontSize = 12.sp
                                 )
                                 Text(
                                     text = trialsOrReps,
                                     color = TextSubtle,
                                     fontSize = 12.sp
+                                )
+                                Text(
+                                    text = "·",
+                                    color = TextSubtle,
+                                    fontSize = 12.sp
+                                )
+                                Text(
+                                    text = drill.targetBenchmark,
+                                    color = BrandAccent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
