@@ -587,7 +587,7 @@ fun ActiveDrillControlViews(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Distraction-free reflex capture active · 120Hz Vsync locked",
+                        text = "Distraction-free reflex capture active",
                         color = TextSubtle,
                         fontSize = 12.sp
                     )

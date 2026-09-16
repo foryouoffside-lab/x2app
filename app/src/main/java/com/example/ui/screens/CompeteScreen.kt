@@ -1,9 +1,7 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,46 +14,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.GridOn
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.model.LeaderboardPlayer
+import com.example.data.SessionEntity
+import com.example.model.DrillType
 import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.BorderActive
 import com.example.ui.theme.BorderSubtle
@@ -69,19 +51,36 @@ import com.example.ui.theme.TextInverse
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSubtle
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+/**
+ * Daily challenge screen.
+ *
+ * Every number here comes from this device's own saved Flash Grid sessions. There is no
+ * backend, so there are no rankings, opponents or other players to show.
+ */
 @Composable
 fun CompeteScreen(
-    currentTab: String,
-    onTabSelected: (String) -> Unit,
-    players: List<LeaderboardPlayer>,
+    sessions: List<SessionEntity> = emptyList(),
     onPlayToday: () -> Unit,
-    onPlayerClick: (LeaderboardPlayer) -> Unit,
     onSeeRecords: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    var joinedWaitlist by remember { mutableStateOf(false) }
+    val dailyResetLabel = remember { timeUntilMidnightLabel() }
+    val challengeRuns = remember(sessions) {
+        sessions.filter { it.drillId == DrillType.FLASH_GRID.id }.sortedByDescending { it.timestamp }
+    }
+    val bestRun = remember(challengeRuns) {
+        challengeRuns.minByOrNull { if (it.bestTimeMs > 0) it.bestTimeMs else it.medianTimeMs }
+    }
+    val playedToday = remember(challengeRuns) {
+        val dayMillis = 24L * 60L * 60L * 1000L
+        val today = System.currentTimeMillis() / dayMillis
+        challengeRuns.firstOrNull { it.timestamp / dayMillis == today }
+    }
 
     Column(
         modifier = modifier
@@ -92,36 +91,14 @@ fun CompeteScreen(
             .padding(top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // 1. Page title + rating chip R 742
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Compete",
-                color = TextPrimary,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Black
-            )
+        Text(
+            text = "Challenge",
+            color = TextPrimary,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Black
+        )
 
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50.dp))
-                    .background(BrandAccent.copy(alpha = 0.15f))
-                    .border(1.dp, BrandAccent.copy(alpha = 0.4f), RoundedCornerShape(50.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = "R 742",
-                    color = BrandAccent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
-        }
-
-        // 2. Daily challenge hero
+        // 1. Today's challenge
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -141,7 +118,7 @@ fun CompeteScreen(
                         Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = AmberAlert, modifier = Modifier.size(15.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "CHALLENGE",
+                            text = "TODAY",
                             color = AmberAlert,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -149,13 +126,13 @@ fun CompeteScreen(
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(13.dp))
+                        Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "08:42:16", color = CoolBlue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text(text = "Resets in $dailyResetLabel", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -171,21 +148,11 @@ fun CompeteScreen(
                     Column {
                         Text(text = "Flash Grid", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(2.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Group, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "2.4k", color = TextMuted, fontSize = 12.sp)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Public, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Global", color = TextMuted, fontSize = 12.sp)
-                            }
-                        }
+                        Text(
+                            text = playedToday?.let { "Played today · ${it.medianTimeMs} ms median" } ?: "Not played yet today",
+                            color = if (playedToday != null) SportGreen else TextMuted,
+                            fontSize = 12.sp
+                        )
                     }
                 }
 
@@ -202,242 +169,164 @@ fun CompeteScreen(
                 ) {
                     Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "Play", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (playedToday != null) "Play again" else "Play",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
 
-        // 3. Your position card
+        // 2. Personal best on this challenge
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(CharcoalCardElevated)
-                .border(1.dp, BrandAccent.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
                 .padding(16.dp)
                 .testTag("your_position_card")
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Public, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "GLOBAL", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "#18,492", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .background(BrandAccent.copy(alpha = 0.15f), RoundedCornerShape(50.dp))
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text(text = "Top 18%", color = BrandAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = SportGreen, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "+214", color = SportGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        // 4. Leaderboard tabs (Global, Country, Friends with icons)
-        val tabList = listOf(
-            "Global" to Icons.Default.Public,
-            "Country" to Icons.Default.Flag,
-            "Friends" to Icons.Default.Group
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(CharcoalCard)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            tabList.forEach { (tab, icon) ->
-                val isSelected = currentTab == tab
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) BrandAccent else Color.Transparent)
-                        .clickable { onTabSelected(tab) }
-                        .padding(vertical = 8.dp)
-                        .testTag("leaderboard_tab_${tab.lowercase()}"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = if (isSelected) TextInverse else TextMuted,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
+            Column {
+                Text(
+                    text = "YOUR BEST",
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                if (bestRun != null) {
+                    Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = tab,
-                            color = if (isSelected) TextInverse else TextMuted,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-
-        // 5. Ranking list
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            players.forEach { player ->
-                val isSelf = player.isCurrentUser
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelf) CharcoalCardElevated else CharcoalCard)
-                        .border(1.dp, if (isSelf) BrandAccent.copy(alpha = 0.5f) else BorderSubtle, RoundedCornerShape(12.dp))
-                        .clickable { onPlayerClick(player) }
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                        .testTag("player_row_${player.rank}")
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "#${player.rank}",
-                                color = if (player.rank <= 3) AmberAlert else TextMuted,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.width(42.dp)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .background(CharcoalCard, CircleShape)
-                                    .border(1.dp, if (isSelf) BrandAccent else BorderSubtle, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = player.avatarInitial,
-                                    color = if (isSelf) BrandAccent else TextPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = player.name,
-                                        color = if (isSelf) BrandAccent else TextPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = player.countryFlag, fontSize = 12.sp)
-                                    if (player.isVerified) {
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Verified", tint = SportGreen, modifier = Modifier.size(13.dp))
-                                    }
-                                }
-                                Text(text = player.handle, color = TextSubtle, fontSize = 11.sp)
-                            }
-                        }
-
-                        Text(
-                            text = player.scoreText,
+                            text = "${if (bestRun.bestTimeMs > 0) bestRun.bestTimeMs else bestRun.medianTimeMs}",
                             color = TextPrimary,
-                            fontSize = 15.sp,
+                            fontSize = 30.sp,
                             fontWeight = FontWeight.Black
                         )
-                    }
-                }
-            }
-        }
-
-        // 6. Personal best strip
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(CharcoalCard)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.Bolt, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "Classic", color = TextMuted, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "214 ms", color = BrandAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                }
-                IconButton(
-                    onClick = onSeeRecords,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .testTag("see_records_button")
-                ) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "See records", tint = CoolBlue, modifier = Modifier.size(16.dp))
-                }
-            }
-        }
-
-        // 7. Coming soon: Duels with waitlist action
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(CharcoalCard.copy(alpha = 0.5f))
-                .border(1.dp, BorderSubtle.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.FlashOn, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(text = "Duels", color = TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text(text = "1v1 sync match", color = TextSubtle, fontSize = 11.sp)
-                    }
-                }
-                OutlinedButton(
-                    onClick = { joinedWaitlist = true },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = if (joinedWaitlist) SportGreen else TextPrimary),
-                    border = BorderStroke(1.dp, BorderSubtle),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    if (joinedWaitlist) {
-                        Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = SportGreen, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Joined", fontSize = 11.sp, color = SportGreen)
-                    } else {
-                        Text(text = "Waitlist", fontSize = 11.sp)
+                        Text(
+                            text = "ms",
+                            color = TextMuted,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${challengeRuns.size} run${if (challengeRuns.size == 1) "" else "s"} on this challenge",
+                        color = TextSubtle,
+                        fontSize = 12.sp
+                    )
+                } else {
+                    Text(
+                        text = "No runs yet",
+                        color = TextPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Play today's challenge to set your first time.",
+                        color = TextSubtle,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        // 3. Recent attempts on this challenge
+        if (challengeRuns.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "RECENT ATTEMPTS",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+                val dateFormat = remember { SimpleDateFormat("d MMM", Locale.US) }
+                challengeRuns.take(5).forEach { run ->
+                    val isBest = run.id == bestRun?.id
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(CharcoalCard)
+                            .border(
+                                1.dp,
+                                if (isBest) BrandAccent.copy(alpha = 0.5f) else BorderSubtle,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = dateFormat.format(Date(run.timestamp)),
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "${run.accuracyPercent}% accuracy",
+                                    color = TextSubtle,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (isBest) {
+                                    Text(
+                                        text = "BEST",
+                                        color = BrandAccent,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Text(
+                                    text = "${run.medianTimeMs} ms",
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+
+        // 4. Link to the full history
+        TextButton(
+            onClick = onSeeRecords,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("see_records_button")
+        ) {
+            Text(text = "See all records", color = CoolBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = CoolBlue,
+                modifier = Modifier.size(15.dp)
+            )
+        }
+
+        Text(
+            text = "Results are saved on this device only.",
+            color = TextSubtle,
+            fontSize = 11.sp,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

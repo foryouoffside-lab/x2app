@@ -4,17 +4,20 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.GeminiCoachService
+import com.example.data.CalibrationStore
 import com.example.data.ReactionDatabase
 import com.example.data.SessionEntity
-import com.example.model.AthleteProfile
 import com.example.model.BatteryAssessmentResult
 import com.example.model.BatteryDrillScore
 import com.example.model.BatteryProtocolType
 import com.example.model.DrillCategory
 import com.example.model.DrillInfo
+import com.example.model.DrillMode
+import com.example.model.supportsTrainMode
 import com.example.model.DrillRunResult
 import com.example.model.DrillType
-import com.example.model.LeaderboardPlayer
+import com.example.model.drillTypeFromId
+import com.example.model.isChoiceCategory
 import com.example.model.NotificationItem
 import com.example.model.PerformanceMetric
 import com.example.model.SensoryInput
@@ -67,6 +70,9 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
     private val _isDailyMode = MutableStateFlow(false)
     val isDailyMode: StateFlow<Boolean> = _isDailyMode.asStateFlow()
 
+    private val _activeDrillMode = MutableStateFlow(DrillMode.TEST)
+    val activeDrillMode: StateFlow<DrillMode> = _activeDrillMode.asStateFlow()
+
     private val _lastResult = MutableStateFlow<DrillRunResult?>(null)
     val lastResult: StateFlow<DrillRunResult?> = _lastResult.asStateFlow()
 
@@ -83,78 +89,130 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
     private val _showNotificationsSheet = MutableStateFlow(false)
     val showNotificationsSheet: StateFlow<Boolean> = _showNotificationsSheet.asStateFlow()
 
-    private val _selectedPlayerSummary = MutableStateFlow<LeaderboardPlayer?>(null)
-    val selectedPlayerSummary: StateFlow<LeaderboardPlayer?> = _selectedPlayerSummary.asStateFlow()
-
     private val _selectedMetricDetail = MutableStateFlow<PerformanceMetric?>(null)
     val selectedMetricDetail: StateFlow<PerformanceMetric?> = _selectedMetricDetail.asStateFlow()
 
     private val _showCalibrationFlow = MutableStateFlow(false)
     val showCalibrationFlow: StateFlow<Boolean> = _showCalibrationFlow.asStateFlow()
 
+    // Timing calibration for this device, applied to every new measurement.
+    private val _touchSamplingOffsetMs = MutableStateFlow(CalibrationStore.touchSamplingOffsetMs(application))
+    val touchSamplingOffsetMs: StateFlow<Long> = _touchSamplingOffsetMs.asStateFlow()
+
+    private val _panelLatencyMs = MutableStateFlow(CalibrationStore.panelLatencyMs(application))
+    val panelLatencyMs: StateFlow<Long> = _panelLatencyMs.asStateFlow()
+
+    private val _displayLatencyMs = MutableStateFlow(CalibrationStore.totalOffsetMs(application))
+    val displayLatencyMs: StateFlow<Long> = _displayLatencyMs.asStateFlow()
+
+    fun saveCalibration(touchSamplingMs: Long, panelMs: Long, refreshHz: Int) {
+        val app = getApplication<Application>()
+        CalibrationStore.save(app, touchSamplingMs, panelMs, refreshHz)
+        _touchSamplingOffsetMs.value = CalibrationStore.touchSamplingOffsetMs(app)
+        _panelLatencyMs.value = CalibrationStore.panelLatencyMs(app)
+        _displayLatencyMs.value = CalibrationStore.totalOffsetMs(app)
+    }
+
     private val _showScoringWorksSheet = MutableStateFlow(false)
     val showScoringWorksSheet: StateFlow<Boolean> = _showScoringWorksSheet.asStateFlow()
 
-    // User Profile
-    private val _userProfile = MutableStateFlow(
-        UserProfile(
-            name = "Alex Morgan",
-            handle = "@alexplays",
-            country = "India",
-            countryFlag = "🇮🇳",
-            sport = "Motorsport / GT3 Driver",
-            rpi = 742,
-            rankLabel = "Top 18%",
-            weeklyDelta = "+24 this week",
-            streakDays = 7,
-            baselineMs = 248,
-            fastestMs = 214,
-            totalSessions = 24,
-            memberSince = "Aug 2026"
-        )
-    )
+    // User Profile (identity fields only; performance stats are derived from real session history below)
+    private val _userProfile = MutableStateFlow(UserProfile())
     val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
 
-    // Notifications
-    private val _notifications = MutableStateFlow(
-        listOf(
-            NotificationItem(
-                id = "1",
-                title = "Coach Combine Verified",
-                description = "Your Motorsport Combine baseline was logged with 5.8% CV stability.",
-                timeAgo = "10m ago",
-                isUnread = true
-            ),
-            NotificationItem(
-                id = "2",
-                title = "Daily Streak Maintained",
-                description = "Day 7 completed! Neuromuscular reaction latency is up 4.2% this week.",
-                timeAgo = "2h ago",
-                isUnread = true
-            ),
-            NotificationItem(
-                id = "3",
-                title = "Global Leaderboard Update",
-                description = "Elena moved to #2 in Flash Grid. You are #18,492 worldwide.",
-                timeAgo = "1d ago",
-                isUnread = false
-            )
-        )
-    )
+    // Notifications are generated from real events (personal bests, streaks) as they happen.
+    private val _notifications = MutableStateFlow<List<NotificationItem>>(emptyList())
     val notifications: StateFlow<List<NotificationItem>> = _notifications.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            sessions.collect { history ->
+                // Profile stats describe measured performance, so only Test runs count.
+                val measured = history.filter { it.mode == DrillMode.TEST.name }
+                if (measured.isNotEmpty()) {
+                    syncProfileWithHistory(measured)
+                }
+            }
+        }
+    }
+
+    private fun syncProfileWithHistory(history: List<SessionEntity>) {
+        val fastest = history.minOf { s -> if (s.bestTimeMs > 0) s.bestTimeMs else s.medianTimeMs }
+
+        // Baseline is a rolling window, not your first-ever run.
+        //
+        // Anchoring to the first session compared every future result against the run
+        // where you were still learning the buttons, so "vs baseline" was flattering by
+        // construction and never got harder. The median of your earliest few sessions is
+        // a fairer reference point.
+        val baselineWindow = history.takeLast(5).map { it.medianTimeMs }.sorted()
+        val baseline = if (baselineWindow.isEmpty()) 0L else baselineWindow[baselineWindow.size / 2]
+
+        val streak = computeStreakDays(history)
+
+        // RPI is built on recent median form, not a single lucky trial.
+        //
+        // "1000 - fastest" keyed the headline number to the noisiest statistic in the
+        // set - the one trial most likely to be a near-anticipation that squeaked past
+        // 100ms - and once set it could never come back down. The median of the last
+        // five sessions moves in both directions and reflects form rather than a fluke.
+        val recentMedians = history.take(5).map { it.medianTimeMs }.sorted()
+        val recentForm = if (recentMedians.isEmpty()) 0L else recentMedians[recentMedians.size / 2]
+        val rpi = if (recentForm <= 0L) 0 else (1000L - recentForm).toInt().coerceIn(0, 999)
+
+        val sdf = SimpleDateFormat("MMM yyyy", Locale.US)
+        val memberSince = sdf.format(Date(history.last().timestamp))
+
+        val weeklyDelta = computeWeeklyDelta(history)
+
+        val current = _userProfile.value
+        _userProfile.value = current.copy(
+            totalSessions = history.size,
+            fastestMs = fastest,
+            baselineMs = baseline,
+            streakDays = streak,
+            rpi = rpi,
+            weeklyDelta = weeklyDelta,
+            memberSince = memberSince
+        )
+    }
+
+    private fun computeStreakDays(history: List<SessionEntity>): Int {
+        val dayMillis = 24L * 60L * 60L * 1000L
+        val days = history.map { it.timestamp / dayMillis }.toSortedSet().sortedDescending()
+        if (days.isEmpty()) return 0
+        val today = System.currentTimeMillis() / dayMillis
+        if (days.first() != today && days.first() != today - 1) return 0
+        var streak = 1
+        for (i in 0 until days.size - 1) {
+            if (days[i] - days[i + 1] == 1L) streak++ else break
+        }
+        return streak
+    }
+
+    private fun computeWeeklyDelta(history: List<SessionEntity>): String {
+        val weekMillis = 7L * 24L * 60L * 60L * 1000L
+        val now = System.currentTimeMillis()
+        val thisWeek = history.filter { now - it.timestamp <= weekMillis }
+        val lastWeek = history.filter { now - it.timestamp > weekMillis && now - it.timestamp <= weekMillis * 2 }
+        if (thisWeek.isEmpty() || lastWeek.isEmpty()) return ""
+        val avgThis = thisWeek.map { it.medianTimeMs }.average()
+        val avgLast = lastWeek.map { it.medianTimeMs }.average()
+        val diff = (avgLast - avgThis).roundToInt()
+        return when {
+            diff > 0 -> "-$diff ms this week"
+            diff < 0 -> "+${-diff} ms this week"
+            else -> "No change this week"
+        }
+    }
 
     // Filters and Screen Preferences
     private val _trainFilter = MutableStateFlow("All")
     val trainFilter: StateFlow<String> = _trainFilter.asStateFlow()
 
-    private val _leaderboardTab = MutableStateFlow("Global")
-    val leaderboardTab: StateFlow<String> = _leaderboardTab.asStateFlow()
-
     private val _progressTimeRange = MutableStateFlow("30D")
     val progressTimeRange: StateFlow<String> = _progressTimeRange.asStateFlow()
 
-    private val _selectedDuration = MutableStateFlow("30s")
-    val selectedDuration: StateFlow<String> = _selectedDuration.asStateFlow()
 
     private val _soundCuesEnabled = MutableStateFlow(true)
     val soundCuesEnabled: StateFlow<Boolean> = _soundCuesEnabled.asStateFlow()
@@ -166,16 +224,11 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
     val exportCsvContent: StateFlow<String> = _exportCsvContent.asStateFlow()
 
     fun setTrainFilter(filter: String) { _trainFilter.value = filter }
-    fun setLeaderboardTab(tab: String) { _leaderboardTab.value = tab }
     fun setProgressTimeRange(range: String) { _progressTimeRange.value = range }
-    fun setSelectedDuration(duration: String) { _selectedDuration.value = duration }
     fun setSoundCuesEnabled(enabled: Boolean) { _soundCuesEnabled.value = enabled }
     fun setHapticsEnabled(enabled: Boolean) { _hapticsEnabled.value = enabled }
 
     // Coach & Team Management Sheets
-    private val _showRosterSheet = MutableStateFlow(false)
-    val showRosterSheet: StateFlow<Boolean> = _showRosterSheet.asStateFlow()
-
     private val _showBatterySheet = MutableStateFlow(false)
     val showBatterySheet: StateFlow<Boolean> = _showBatterySheet.asStateFlow()
 
@@ -466,79 +519,12 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         )
     )
 
-    // Team Roster & Active Athlete
-    val rosterList = listOf(
-        AthleteProfile(
-            id = "alex",
-            name = "Alex Morgan",
-            handle = "@alexplays",
-            sport = "Motorsport",
-            role = "GT3 Driver",
-            avatarInitial = "A",
-            countryFlag = "🇮🇳",
-            rpi = 742,
-            baselineMs = 248,
-            fastestMs = 214,
-            cnsTapBaselineHz = 7.6f,
-            totalSessions = 24,
-            isActive = true
-        ),
-        AthleteProfile(
-            id = "marcus",
-            name = "Marcus Chen",
-            handle = "@chen_fps",
-            sport = "Esports",
-            role = "Tactical FPS Pro",
-            avatarInitial = "M",
-            countryFlag = "🇸🇬",
-            rpi = 912,
-            baselineMs = 186,
-            fastestMs = 174,
-            cnsTapBaselineHz = 8.4f,
-            totalSessions = 58,
-            isActive = false
-        ),
-        AthleteProfile(
-            id = "sarah",
-            name = "Sarah Lin",
-            handle = "@sarah_box",
-            sport = "Combat Sports",
-            role = "Featherweight Boxing",
-            avatarInitial = "S",
-            countryFlag = "🇨🇦",
-            rpi = 780,
-            baselineMs = 230,
-            fastestMs = 198,
-            cnsTapBaselineHz = 7.8f,
-            totalSessions = 39,
-            isActive = false
-        ),
-        AthleteProfile(
-            id = "mateo",
-            name = "Mateo Silva",
-            handle = "@silva_m",
-            sport = "Field Soccer",
-            role = "Central Midfielder",
-            avatarInitial = "M",
-            countryFlag = "🇧🇷",
-            rpi = 805,
-            baselineMs = 218,
-            fastestMs = 196,
-            cnsTapBaselineHz = 7.9f,
-            totalSessions = 31,
-            isActive = false
-        )
-    )
-
-    private val _activeAthlete = MutableStateFlow(rosterList[0])
-    val activeAthlete: StateFlow<AthleteProfile> = _activeAthlete.asStateFlow()
-
     // Sports Batteries (Coach Combine Protocols)
     val sportsBatteries = listOf(
         SportsBattery(
             id = "single_type_crt_battery",
-            title = "Specialized CRT Battery (Concept 1)",
-            sportTag = "Single-Type Battery · Prioritized",
+            title = "Specialized CRT Battery",
+            sportTag = "Choice reaction · 4 interfaces",
             description = "The scientific gold-standard for Choice Reaction Time (CRT). 4 specialized drills testing the same cognitive capacity across different interfaces (4-Way Arrows, Color Matching, 4x4 Grid Matrix, Spatial Audio). Calculates true cognitive speed via Average of Medians: (M1 + M2 + M3 + M4) / 4.",
             drills = listOf(DrillType.CHOICE_4WAY, DrillType.COLOR_MATCH, DrillType.GRID_TRACKING, DrillType.SPATIAL_AUDIO),
             durationMin = "4 min",
@@ -547,8 +533,8 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         ),
         SportsBattery(
             id = "multi_type_matrix_battery",
-            title = "Multi-Type Comprehensive Reaction Matrix",
-            sportTag = "Holistic Index (Concept 2)",
+            title = "Comprehensive Reaction Matrix",
+            sportTag = "Multi-paradigm index",
             description = "Multi-paradigm battery combining Simple (SRT), Choice (CRT), and Recognition (RRT) speeds. Normalizes scores against standard human baselines to calculate a composite Reaction Index (0-100 score).",
             drills = listOf(DrillType.CLASSIC, DrillType.QUADRANT_CHOICE, DrillType.GO_NO_GO, DrillType.AUDITORY, DrillType.FLASH_GRID),
             durationMin = "5 min",
@@ -609,28 +595,6 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         )
     )
 
-    // Leaderboards
-    val globalPlayers = listOf(
-        LeaderboardPlayer(1, "Marcus Chen", "@chen_m", "M", "🇸🇬", "178 ms", true, rpi = 912, bestDrill = "Classic: 174 ms"),
-        LeaderboardPlayer(2, "Elena Rostova", "@elena_fps", "E", "🇪🇪", "184 ms", true, rpi = 895, bestDrill = "Flash Grid: 98%"),
-        LeaderboardPlayer(3, "Takeru Sato", "@tksato", "T", "🇯🇵", "189 ms", true, rpi = 884, bestDrill = "Choice: 212 ms"),
-        LeaderboardPlayer(4, "Liam O'Connor", "@liam_reflex", "L", "🇮🇪", "195 ms", true, rpi = 862, bestDrill = "Precision: 96%"),
-        LeaderboardPlayer(18492, "Alex Morgan", "@alexplays", "A", "🇮🇳", "214 ms", true, isCurrentUser = true, rpi = 742, bestDrill = "Classic: 214 ms")
-    )
-
-    val countryPlayers = listOf(
-        LeaderboardPlayer(1, "Aarav Sharma", "@aarav_s", "A", "🇮🇳", "192 ms", true, rpi = 870, bestDrill = "Classic: 192 ms"),
-        LeaderboardPlayer(2, "Priya Nair", "@priyan", "P", "🇮🇳", "198 ms", true, rpi = 851, bestDrill = "Flash Grid: 94%"),
-        LeaderboardPlayer(3, "Rohan Verma", "@rohan_v", "R", "🇮🇳", "205 ms", true, rpi = 810, bestDrill = "Choice: 228 ms"),
-        LeaderboardPlayer(142, "Alex Morgan", "@alexplays", "A", "🇮🇳", "214 ms", true, isCurrentUser = true, rpi = 742, bestDrill = "Classic: 214 ms")
-    )
-
-    val friendPlayers = listOf(
-        LeaderboardPlayer(1, "David Miller", "@dmiller", "D", "🇺🇸", "208 ms", true, rpi = 760, bestDrill = "Classic: 208 ms"),
-        LeaderboardPlayer(2, "Alex Morgan", "@alexplays", "A", "🇮🇳", "214 ms", true, isCurrentUser = true, rpi = 742, bestDrill = "Classic: 214 ms"),
-        LeaderboardPlayer(3, "Sarah Lin", "@sarah_l", "S", "🇨🇦", "225 ms", true, rpi = 720, bestDrill = "Choice: 242 ms")
-    )
-
     fun selectTab(tab: AppTab) {
         _currentTab.value = tab
         _activeScreen.value = ActiveScreen.TABS
@@ -644,9 +608,10 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         _selectedDrillForSheet.value = null
     }
 
-    fun startDrill(type: DrillType, dailyMode: Boolean = false) {
+    fun startDrill(type: DrillType, dailyMode: Boolean = false, mode: DrillMode = DrillMode.TEST) {
         _activeDrillType.value = type
         _isDailyMode.value = dailyMode
+        _activeDrillMode.value = if (type.supportsTrainMode) mode else DrillMode.TEST
         _selectedDrillForSheet.value = null
         _activeScreen.value = ActiveScreen.ACTIVE_DRILL
     }
@@ -655,29 +620,6 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         _activeScreen.value = ActiveScreen.TABS
     }
 
-    // Coach Athlete Roster controls
-    fun openRoster() {
-        _showRosterSheet.value = true
-    }
-
-    fun closeRoster() {
-        _showRosterSheet.value = false
-    }
-
-    fun switchAthlete(athlete: AthleteProfile) {
-        _activeAthlete.value = athlete
-        _userProfile.value = _userProfile.value.copy(
-            name = athlete.name,
-            handle = athlete.handle,
-            countryFlag = athlete.countryFlag,
-            sport = "${athlete.sport} / ${athlete.role}",
-            rpi = athlete.rpi,
-            baselineMs = athlete.baselineMs,
-            fastestMs = athlete.fastestMs,
-            totalSessions = athlete.totalSessions
-        )
-        _showRosterSheet.value = false
-    }
 
     // Sports Batteries (Coach Combine & Battery Studio Grid)
     fun openBatteryDetail(battery: SportsBattery) {
@@ -750,18 +692,9 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
 
     fun calculateAndSetBatteryResult(battery: SportsBattery): BatteryAssessmentResult {
         val state = _batterySessionState.value ?: BatterySessionState(battery = battery)
-        val athlete = _activeAthlete.value
-        val completedScores = battery.drills.map { drill ->
-            state.drillResults[drill] ?: BatteryDrillScore(
-                drillType = drill,
-                medianMs = 350L,
-                bestMs = 320L,
-                accuracyPercent = 100,
-                consistencyMs = 24L,
-                isCompleted = true,
-                normalizedScore = 80
-            )
-        }
+        val athlete = _userProfile.value
+        // Only include drills the athlete actually ran; never fabricate a score for a skipped drill.
+        val completedScores = battery.drills.mapNotNull { drill -> state.drillResults[drill] }
 
         val result = if (battery.protocolType == BatteryProtocolType.SINGLE_TYPE_SPECIALIZED) {
             // Concept 1: Average of Medians across all specialized interfaces
@@ -860,14 +793,24 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         iesScore: Long = medianMs,
         exGaussianTau: Long = 20L,
         cnsHz: Float? = null,
-        rawTrials: List<TrialRecord> = emptyList()
+        rawTrials: List<TrialRecord> = emptyList(),
+        mode: DrillMode = DrillMode.TEST,
+        survivedSec: Int = 0,
+        levelReached: Int = 0
     ) {
-        val athlete = _activeAthlete.value
-        val baseline = athlete.baselineMs
+        val athlete = _userProfile.value
+        // Train runs are excluded from every comparison: their difficulty ramps within
+        // the run, so their times are not measurements and must not move a baseline,
+        // a personal best or the trend.
+        val isTest = mode == DrillMode.TEST
+        val history = sessions.value.filter { it.mode == DrillMode.TEST.name }
+        // Personal baseline is this athlete's own first-ever recorded session (real), not a fabricated constant.
+        val baseline = history.lastOrNull()?.medianTimeMs ?: medianMs
         val diffFromBaseline = if (baseline > 0) {
             ((baseline - medianMs).toFloat() / baseline.toFloat()) * 100f
         } else 0f
-        val isPb = medianMs < athlete.fastestMs && medianMs > 100L
+        val previousFastest = history.minOfOrNull { s -> if (s.bestTimeMs > 0) s.bestTimeMs else s.medianTimeMs }
+        val isPb = isTest && (previousFastest == null || bestMs < previousFastest) && bestMs > 100L
 
         viewModelScope.launch {
             val coachNote = GeminiCoachService.analyzeDrillRun(
@@ -890,6 +833,9 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
                 cnsFrequencyHz = cnsHz,
                 vsBaselinePercent = (diffFromBaseline * 10f).roundToInt() / 10f,
                 isPersonalBest = isPb,
+                mode = mode,
+                survivedSec = survivedSec,
+                levelReached = levelReached,
                 coachNote = coachNote,
                 isVerified = true,
                 athleteName = athlete.name,
@@ -918,21 +864,27 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
                     sportCategory = athlete.sport,
                     isVerified = true,
                     rawTrialsCsv = rawCsv,
-                    note = coachNote
+                    note = coachNote,
+                    mode = mode.name,
+                    survivedSec = survivedSec,
+                    levelReached = levelReached
                 )
             )
 
-            // Update user profile
-            val currentProfile = _userProfile.value
-            val newTotal = currentProfile.totalSessions + 1
-            val newFastest = if (isPb) medianMs else currentProfile.fastestMs
-            val deltaRpi = if (medianMs < baseline && medianMs > 100) 4 else 1
-            _userProfile.value = currentProfile.copy(
-                totalSessions = newTotal,
-                fastestMs = newFastest,
-                rpi = currentProfile.rpi + deltaRpi,
-                weeklyDelta = "+${24 + deltaRpi} this week"
-            )
+            // Profile stats (totalSessions, fastestMs, rpi, streak, etc.) are recomputed
+            // automatically from real Room history by the sessions collector in init{}.
+
+            if (isPb) {
+                _notifications.value = listOf(
+                    NotificationItem(
+                        id = "pb_${System.currentTimeMillis()}",
+                        title = "New Personal Best",
+                        description = "${type.title}: $bestMs ms — your fastest result yet.",
+                        timeAgo = "Just now",
+                        isUnread = true
+                    )
+                ) + _notifications.value
+            }
 
             // Record into active battery if present
             val batteryState = _batterySessionState.value
@@ -964,14 +916,27 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // Real average median time across completed choice-reaction (CRT) drills, or null if none recorded yet.
+    fun averageChoiceSpeedMs(): Long? {
+        val choiceSessions = sessions.value.filter { s -> drillTypeFromId(s.drillId)?.isChoiceCategory == true }
+        if (choiceSessions.isEmpty()) return null
+        return choiceSessions.map { it.medianTimeMs }.average().roundToInt().toLong()
+    }
+
     fun openCoachInsight() {
         _showCoachInsightSheet.value = true
         if (_coachInsightContent.value.isEmpty()) {
+            val visualSpeedMs = _userProfile.value.fastestMs
+            val choiceSpeedMs = averageChoiceSpeedMs()
+            if (visualSpeedMs <= 0 || choiceSpeedMs == null) {
+                _coachInsightContent.value = "Complete a Visual Reflex drill and a Choice Reaction drill to unlock this comparison."
+                return
+            }
             _isLoadingCoachInsight.value = true
             viewModelScope.launch {
                 val insight = GeminiCoachService.getCoachInsightExplanation(
-                    visualSpeedMs = _userProfile.value.fastestMs,
-                    choiceSpeedMs = 286
+                    visualSpeedMs = visualSpeedMs,
+                    choiceSpeedMs = choiceSpeedMs
                 )
                 _coachInsightContent.value = insight
                 _isLoadingCoachInsight.value = false
@@ -995,20 +960,19 @@ class ReactionViewModel(application: Application) : AndroidViewModel(application
         _notifications.value = _notifications.value.map { it.copy(isUnread = false) }
     }
 
-    fun openPlayerSummary(player: LeaderboardPlayer) {
-        _selectedPlayerSummary.value = player
-    }
-
-    fun closePlayerSummary() {
-        _selectedPlayerSummary.value = null
-    }
-
     fun openMetricDetail(metric: PerformanceMetric) {
         _selectedMetricDetail.value = metric
     }
 
     fun closeMetricDetail() {
         _selectedMetricDetail.value = null
+    }
+
+    /** Discard a run so an interrupted or mis-tapped session cannot distort the trend. */
+    fun deleteSession(id: Long) {
+        viewModelScope.launch {
+            dao.deleteSession(id)
+        }
     }
 
     fun openCalibration() {

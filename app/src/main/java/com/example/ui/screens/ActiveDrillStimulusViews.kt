@@ -76,6 +76,7 @@ fun ActiveDrillStimulusArea(
                     drillType = drillType,
                     drillState = drillState,
                     lastFeedbackMs = lastFeedbackMs,
+                    lastFeedbackMsg = lastFeedbackMsg,
                     f1LitCount = f1LitCount,
                     isCnsRunning = isCnsRunning,
                     cnsTapCount = cnsTapCount,
@@ -116,6 +117,7 @@ fun ActiveDrillStimulusArea(
                     drillType = drillType,
                     drillState = drillState,
                     lastFeedbackMs = lastFeedbackMs,
+                    lastFeedbackMsg = lastFeedbackMsg,
                     choice4WayDirection = choice4WayDirection,
                     matchColorNames = matchColorNames,
                     matchColorValues = matchColorValues,
@@ -138,6 +140,7 @@ private fun VisualSensoryStimulusView(
     drillType: DrillType,
     drillState: DrillState,
     lastFeedbackMs: Long,
+    lastFeedbackMsg: String,
     f1LitCount: Int,
     isCnsRunning: Boolean,
     cnsTapCount: Int,
@@ -184,7 +187,7 @@ private fun VisualSensoryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -243,10 +246,10 @@ private fun VisualSensoryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = CoolBlue, fontSize = 44.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, CoolBlue), fontSize = 44.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (lastFeedbackMs < 165) "Elite Acoustic Conduction" else "Auditory Reflex Recorded",
+                            text = if (lastFeedbackMs in 1..164) "Elite Acoustic Conduction" else if (lastFeedbackMs <= 0L) "No response" else "Auditory Reflex Recorded",
                             color = TextMuted,
                             fontSize = 13.sp
                         )
@@ -307,7 +310,7 @@ private fun VisualSensoryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -380,7 +383,7 @@ private fun VisualSensoryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -492,7 +495,7 @@ private fun VisualSensoryStimulusView(
                 } else if (drillState == DrillState.TRIAL_FEEDBACK) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("$lastFeedbackMs ms", color = BrandAccent, fontSize = 42.sp, fontWeight = FontWeight.Black)
+                            Text(outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 42.sp, fontWeight = FontWeight.Black)
                             Spacer(modifier = Modifier.height(12.dp))
                             Button(
                                 onClick = { onAdvanceTrial() },
@@ -514,7 +517,7 @@ private fun VisualSensoryStimulusView(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (drillState == DrillState.TRIAL_FEEDBACK) {
-                    Text("$lastFeedbackMs ms", color = BrandAccent, fontSize = 38.sp, fontWeight = FontWeight.Black)
+                    Text(outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 38.sp, fontWeight = FontWeight.Black)
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = { onAdvanceTrial() },
@@ -639,7 +642,7 @@ private fun CognitiveStimulusView(
                     DrillState.TRIAL_FEEDBACK -> {
                         Text(
                             text = lastFeedbackMsg,
-                            color = if (lastFeedbackMsg.contains("Error")) CoralWarning else SportGreen,
+                            color = if (listOf("Missed", "Error", "Anticipation", "Too Soon").any { lastFeedbackMsg.contains(it, ignoreCase = true) }) CoralWarning else SportGreen,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Black,
                             textAlign = TextAlign.Center
@@ -686,7 +689,7 @@ private fun CognitiveStimulusView(
                         fontWeight = FontWeight.Black
                     )
                 } else if (drillState == DrillState.TRIAL_FEEDBACK) {
-                    Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 42.sp, fontWeight = FontWeight.Black)
+                    Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 42.sp, fontWeight = FontWeight.Black)
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = { onAdvanceTrial() },
@@ -738,7 +741,7 @@ private fun CognitiveStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -787,7 +790,7 @@ private fun CognitiveStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -847,7 +850,7 @@ private fun CognitiveStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -898,7 +901,7 @@ private fun CognitiveStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -923,6 +926,7 @@ private fun SpecializedBatteryStimulusView(
     drillType: DrillType,
     drillState: DrillState,
     lastFeedbackMs: Long,
+    lastFeedbackMsg: String,
     choice4WayDirection: Int,
     matchColorNames: List<String>,
     matchColorValues: List<Color>,
@@ -984,7 +988,7 @@ private fun SpecializedBatteryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -1048,7 +1052,7 @@ private fun SpecializedBatteryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -1132,7 +1136,7 @@ private fun SpecializedBatteryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -1222,7 +1226,7 @@ private fun SpecializedBatteryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -1309,7 +1313,7 @@ private fun SpecializedBatteryStimulusView(
                         }
                     }
                     DrillState.TRIAL_FEEDBACK -> {
-                        Text(text = "$lastFeedbackMs ms", color = BrandAccent, fontSize = 46.sp, fontWeight = FontWeight.Black)
+                        Text(text = outcomeGlyph(lastFeedbackMsg) + "  " + latencyLabel(lastFeedbackMs), color = feedbackColor(lastFeedbackMsg, BrandAccent), fontSize = 46.sp, fontWeight = FontWeight.Black)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { onAdvanceTrial() },
@@ -1328,3 +1332,26 @@ private fun SpecializedBatteryStimulusView(
         else -> {}
     }
 }
+
+/**
+ * A trial with no recorded latency was never answered, so it must not be printed as
+ * "0 ms" - that reads like an impossibly fast result rather than a miss.
+ */
+internal fun latencyLabel(ms: Long): String = if (ms <= 0L) "Missed" else "$ms ms"
+
+/**
+ * Success and failure must survive colour blindness.
+ *
+ * Roughly 8% of men cannot reliably separate the green and red used for hit and miss, so
+ * the outcome is also carried by a glyph that reads without any colour at all.
+ */
+internal fun outcomeGlyph(msg: String): String = if (isFailureFeedback(msg)) "✕" else "✓"
+
+/** Whether a feedback line describes a failed trial rather than a successful one. */
+internal fun isFailureFeedback(msg: String): Boolean =
+    listOf("Missed", "Error", "Incorrect", "Wrong", "Anticipation", "Too Soon", "Commission", "Failed")
+        .any { msg.contains(it, ignoreCase = true) }
+
+/** Success colour for a good trial, warning colour for a failed one. */
+internal fun feedbackColor(msg: String, success: androidx.compose.ui.graphics.Color): androidx.compose.ui.graphics.Color =
+    if (isFailureFeedback(msg)) CoralWarning else success

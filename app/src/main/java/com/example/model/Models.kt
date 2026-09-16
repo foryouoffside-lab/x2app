@@ -69,6 +69,59 @@ enum class DrillState {
     FINISHED
 }
 
+fun drillTypeFromId(id: String): DrillType? = DrillType.values().find { it.id == id }
+
+// Scored trials per Test run.
+//
+// Five was far too few to call a benchmark: the test-retest reliability of a 5-trial
+// median is poor, and the app states targets to the millisecond. Published SRT/CRT
+// protocols use 20-40 scored trials, so that is what a Test now runs.
+val DrillType.scoredTrialsCount: Int
+    get() = when (this) {
+        // A fixed 10-second tapping burst; trial count does not apply.
+        DrillType.CNS_TAP -> 1
+        // Needs enough No-Go trials to measure inhibition: 24 at 25% No-Go gives 6.
+        DrillType.GO_NO_GO -> 24
+        // Anticipation timing is slow and fatiguing; fewer trials, still enough to average.
+        DrillType.RHYTHM_SYNC -> 12
+        else -> 20
+    }
+
+// Unscored practice trials at the start of every Test run.
+//
+// The first trial of a run is reliably slower - the hand is not set and the layout is
+// unfamiliar - and at small n that bias lands squarely in the median. These run for real
+// but are excluded from every statistic.
+val DrillType.warmUpTrialsCount: Int
+    get() = when (this) {
+        DrillType.CNS_TAP -> 0
+        else -> 2
+    }
+
+// Proportion of trials where no stimulus ever appears.
+//
+// Without catch trials the only guard against guessing is the <100ms rule, which catches
+// only egregious jumps: someone tapping a steady rhythm looks identical to someone fast.
+// A catch trial has no stimulus, so any response on it is a pure false alarm.
+val DrillType.catchTrialRate: Float
+    get() = when (this) {
+        // These score withholding or timing directly; a catch trial would double up.
+        DrillType.CNS_TAP, DrillType.GO_NO_GO, DrillType.RHYTHM_SYNC -> 0f
+        else -> 0.12f
+    }
+
+// Total trials presented in a Test run, practice and catch trials included.
+val DrillType.totalTrialsCount: Int
+    get() {
+        if (this == DrillType.CNS_TAP) return 1
+        val scored = scoredTrialsCount + warmUpTrialsCount
+        val catches = kotlin.math.ceil(scored * catchTrialRate).toInt()
+        return scored + catches
+    }
+
+val DrillType.isChoiceCategory: Boolean
+    get() = category == "Cognitive Decision"
+
 data class DrillInfo(
     val type: DrillType,
     val subtitle: String,
@@ -90,7 +143,11 @@ data class TrialRecord(
     val isCorrect: Boolean,
     val isFalseStart: Boolean, // < 100ms Olympic false start violation
     val stimulusInfo: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    // Practice trial: presented and played for real, but excluded from every statistic.
+    val isWarmUp: Boolean = false,
+    // No stimulus was ever shown. Responding here is a false alarm; withholding is correct.
+    val isCatchTrial: Boolean = false
 )
 
 data class DrillRunResult(
@@ -108,26 +165,13 @@ data class DrillRunResult(
     val isPersonalBest: Boolean,
     val coachNote: String,
     val isVerified: Boolean = true,
-    val athleteName: String = "Alex Morgan",
-    val rawTrials: List<TrialRecord> = emptyList()
+    val athleteName: String = "",
+    val rawTrials: List<TrialRecord> = emptyList(),
+    val mode: DrillMode = DrillMode.TEST,
+    val survivedSec: Int = 0,
+    val levelReached: Int = 0
 )
 
-data class AthleteProfile(
-    val id: String,
-    val name: String,
-    val handle: String,
-    val sport: String,
-    val role: String,
-    val avatarInitial: String,
-    val countryFlag: String,
-    val rpi: Int,
-    val baselineMs: Long,
-    val fastestMs: Long,
-    val cnsTapBaselineHz: Float = 7.4f,
-    val cvPercent: Float = 6.2f,
-    val totalSessions: Int,
-    val isActive: Boolean = false
-)
 
 enum class BatteryProtocolType {
     SINGLE_TYPE_SPECIALIZED, // Concept 1: Specialized CRT Battery (Average of Medians across multiple layouts)
@@ -171,18 +215,6 @@ data class SportsBattery(
     val baselineNormMs: Map<DrillType, Long> = emptyMap()
 )
 
-data class LeaderboardPlayer(
-    val rank: Int,
-    val name: String,
-    val handle: String,
-    val avatarInitial: String,
-    val countryFlag: String,
-    val scoreText: String,
-    val isVerified: Boolean,
-    val isCurrentUser: Boolean = false,
-    val rpi: Int = 740,
-    val bestDrill: String = "Classic Reaction: 208 ms"
-)
 
 data class NotificationItem(
     val id: String,
@@ -193,19 +225,18 @@ data class NotificationItem(
 )
 
 data class UserProfile(
-    val name: String = "Alex Morgan",
-    val handle: String = "@alexplays",
-    val country: String = "India",
-    val countryFlag: String = "🇮🇳",
-    val sport: String = "Motorsport / F1 Academy",
-    val rpi: Int = 742,
-    val rankLabel: String = "Top 18%",
-    val weeklyDelta: String = "+24 this week",
-    val streakDays: Int = 7,
-    val baselineMs: Long = 248,
-    val fastestMs: Long = 214,
-    val totalSessions: Int = 21,
-    val memberSince: String = "Aug 2026"
+    val name: String = "Athlete",
+    val handle: String = "",
+    val country: String = "",
+    val countryFlag: String = "",
+    val sport: String = "Reaction Training",
+    val rpi: Int = 0,
+    val weeklyDelta: String = "",
+    val streakDays: Int = 0,
+    val baselineMs: Long = 0,
+    val fastestMs: Long = 0,
+    val totalSessions: Int = 0,
+    val memberSince: String = ""
 )
 
 data class PerformanceMetric(

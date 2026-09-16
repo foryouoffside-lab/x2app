@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -52,6 +56,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,15 +64,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.DrillInfo
+import com.example.model.DrillMode
+import com.example.model.TrainingRules
+import com.example.model.supportsTrainMode
 import com.example.model.DrillType
-import com.example.model.LeaderboardPlayer
 import com.example.model.NotificationItem
 import com.example.model.PerformanceMetric
+import com.example.model.totalTrialsCount
 import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.BorderActive
 import com.example.ui.theme.BorderSubtle
@@ -81,6 +90,7 @@ import com.example.ui.theme.TextInverse
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSubtle
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -211,14 +221,15 @@ fun CoachInsightSheet(
 @Composable
 fun DrillDetailSheet(
     drill: DrillInfo,
-    selectedDuration: String,
-    onDurationSelected: (String) -> Unit,
     soundEnabled: Boolean,
     onSoundToggle: (Boolean) -> Unit,
-    onStartDrill: () -> Unit,
+    onStartDrill: (DrillMode) -> Unit,
     onHowScoringWorks: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    // Test is the default: a new drill should first be measured, then trained.
+    var selectedMode by remember(drill.type) { mutableStateOf(DrillMode.TEST) }
+    val canTrain = drill.type.supportsTrainMode
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = CharcoalCard,
@@ -274,35 +285,82 @@ fun DrillDetailSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Duration selector: 3 min, 5 min, 8 min
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(text = "DURATION", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf("3 min", "5 min", "8 min").forEach { duration ->
-                    val isSelected = selectedDuration == duration
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) BrandAccent else CharcoalCardElevated)
-                            .border(1.dp, if (isSelected) BrandAccent else BorderSubtle, RoundedCornerShape(12.dp))
-                            .clickable { onDurationSelected(duration) }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = duration,
-                            color = if (isSelected) TextInverse else TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+            // Mode picker. Test measures, Train trains - see DrillMode for why one
+            // format cannot honestly do both.
+            if (canTrain) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(text = "MODE", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val trials = drill.type.totalTrialsCount
+                    listOf(
+                        Triple(DrillMode.TEST, "Test", "$trials trials · measured"),
+                        Triple(DrillMode.TRAIN, "Train", "${TrainingRules.TOTAL_TIME_SEC.toInt()}s · survive")
+                    ).forEach { (modeOption, label, caption) ->
+                        val isSelected = selectedMode == modeOption
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) BrandAccent else CharcoalCardElevated)
+                                .border(1.dp, if (isSelected) BrandAccent else BorderSubtle, RoundedCornerShape(12.dp))
+                                .clickable { selectedMode = modeOption }
+                                .padding(vertical = 10.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) TextInverse else TextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = caption,
+                                color = if (isSelected) TextInverse.copy(alpha = 0.75f) else TextSubtle,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = if (selectedMode == DrillMode.TEST) {
+                        "Fixed protocol, no difficulty ramp - this is the run that sets your benchmark and trend."
+                    } else {
+                        "The clock is the only way out. Correct responses buy time, mistakes cost it, and it speeds up as you level. Not counted toward your benchmark."
+                    },
+                    color = TextSubtle,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
+                )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(text = "PROTOCOL", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    val trials = drill.type.totalTrialsCount
+                    listOf(
+                        "$trials trial${if (trials == 1) "" else "s"}",
+                        drill.defaultDuration,
+                        "Target ${drill.targetBenchmark}"
+                    ).forEach { detail ->
+                        Text(text = detail, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -366,7 +424,7 @@ fun DrillDetailSheet(
 
             // Primary Start drill button
             Button(
-                onClick = onStartDrill,
+                onClick = { onStartDrill(selectedMode) },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
@@ -490,6 +548,15 @@ fun NotificationsSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            if (notifications.isEmpty()) {
+                Text(
+                    text = "No notifications yet. You'll see updates here as you train.",
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            }
+
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(notifications) { item ->
                     Box(
@@ -521,138 +588,6 @@ fun NotificationsSheet(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PlayerSummarySheet(
-    player: LeaderboardPlayer,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = CharcoalCard,
-        tonalElevation = 8.dp,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Player Summary", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                IconButton(onClick = onDismiss) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .background(CharcoalCardElevated, CircleShape)
-                        .border(1.5.dp, if (player.isCurrentUser) BrandAccent else BorderSubtle, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = player.avatarInitial, color = if (player.isCurrentUser) BrandAccent else TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = player.name, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = player.countryFlag, fontSize = 16.sp)
-                        if (player.isVerified) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Verified", tint = SportGreen, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                    Text(text = "${player.handle} · Rank #${player.rank}", color = TextMuted, fontSize = 13.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                        .padding(14.dp)
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "RPI", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Text(text = "${player.rpi}", color = BrandAccent, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                        .padding(14.dp)
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Bolt, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "BEST", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Text(text = player.scoreText, color = CoolBlue, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                    .padding(14.dp)
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "SIGNATURE", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(text = player.bestDrill, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = CharcoalCardElevated, contentColor = TextPrimary),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(48.dp)
-            ) {
-                Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Close")
             }
         }
     }
@@ -777,11 +712,29 @@ fun MetricDetailSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalibrationSheet(
+    touchSamplingOffsetMs: Long = 0L,
+    panelLatencyMs: Long = 0L,
+    onSaveCalibration: (touchSamplingOffsetMs: Long, panelLatencyMs: Long, refreshHz: Int) -> Unit = { _, _, _ -> },
     onDismiss: () -> Unit
 ) {
-    var step by remember { mutableIntStateOf(1) }
-    var tapSampleCount by remember { mutableIntStateOf(0) }
-    var measuredLatency by remember { mutableIntStateOf(4) }
+    val view = LocalView.current
+    val refreshRateHz = remember { view.display?.refreshRate?.roundToInt()?.takeIf { it > 0 } ?: 60 }
+    val frameDurationMs = remember(refreshRateHz) { 1000f / refreshRateHz }
+
+    // Intervals between consecutive touch samples during a drag. This is the digitiser's
+    // reporting period - a real, measurable property of the hardware.
+    val sampleIntervals = remember { mutableStateListOf<Long>() }
+    var manualPanelLatency by remember { mutableStateOf(panelLatencyMs) }
+
+    val touchPeriodMs = remember(sampleIntervals.size) {
+        if (sampleIntervals.size >= 8) {
+            // Median: a finger pausing mid-drag produces outliers a mean would follow.
+            sampleIntervals.sorted()[sampleIntervals.size / 2].toFloat()
+        } else null
+    }
+    // A sample is stamped up to one period late, half a period on average.
+    val touchOffsetMs = touchPeriodMs?.let { (it / 2f).roundToInt().toLong() }
+    val hasEnoughSamples = touchOffsetMs != null
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -792,174 +745,193 @@ fun CalibrationSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
         ) {
+            Text(text = "Timing calibration", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Reaction times run from the vsync of the frame carrying the stimulus to the kernel timestamp of your touch. This removes the two overheads left inside that window.",
+                color = TextMuted,
+                fontSize = 12.sp,
+                lineHeight = 17.sp
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            CalibrationRow(
+                title = "Display refresh",
+                value = "$refreshRateHz Hz",
+                detail = "One frame is " + "%.1f".format(frameDurationMs) + " ms. Stimulus onset is timed from the real vsync, so this no longer adds error."
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            CalibrationRow(
+                title = "Touch sampling",
+                value = if (touchPeriodMs != null) "%.1f".format(touchPeriodMs) + " ms" else "not measured",
+                detail = if (touchOffsetMs != null) {
+                    "Digitiser reports every " + "%.1f".format(touchPeriodMs) + " ms, so a contact is stamped about " + touchOffsetMs + " ms late."
+                } else {
+                    "Drag slowly inside the box below to sample your digitiser's reporting rate."
+                }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(110.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(CharcoalCardElevated)
+                    .border(1.dp, if (hasEnoughSamples) SportGreen else BorderSubtle, RoundedCornerShape(14.dp))
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            var previous = 0L
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull()
+                                if (change == null) continue
+                                if (!change.pressed) {
+                                    previous = 0L
+                                    continue
+                                }
+                                val t = change.uptimeMillis
+                                if (previous != 0L) {
+                                    val delta = t - previous
+                                    // Ignore the gap across a lifted finger.
+                                    if (delta in 1..60) sampleIntervals.add(delta)
+                                }
+                                previous = t
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (hasEnoughSamples) "Sampled ${sampleIntervals.size} touch events" else "Drag here (${sampleIntervals.size}/8)",
+                    color = if (hasEnoughSamples) SportGreen else TextMuted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CalibrationRow(
+                title = "Panel latency",
+                value = if (manualPanelLatency > 0L) "$manualPanelLatency ms" else "not set",
+                detail = "The delay between vsync and pixels emitting light cannot be measured on this device - that needs a high-speed camera. It stays out of your results unless you enter a figure you measured yourself."
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(0L, 5L, 10L, 15L).forEach { option ->
+                    val selected = manualPanelLatency == option
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selected) BrandAccent else CharcoalCardElevated)
+                            .border(1.dp, if (selected) BrandAccent else BorderSubtle, RoundedCornerShape(10.dp))
+                            .clickable { manualPanelLatency = option }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (option == 0L) "None" else "$option ms",
+                            color = if (selected) TextInverse else TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            val total = (touchOffsetMs ?: 0L) + manualPanelLatency
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CharcoalCardElevated)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                    .padding(14.dp)
+            ) {
+                Column {
+                    Text(text = "TOTAL CORRECTION", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "$total ms", color = BrandAccent, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Subtracted from every future measurement. Results already recorded are left as they were.",
+                        color = TextSubtle,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Button(
+                onClick = {
+                    onSaveCalibration(touchOffsetMs ?: 0L, manualPanelLatency, refreshRateHz)
+                    onDismiss()
+                },
+                enabled = hasEnoughSamples || manualPanelLatency > 0L,
+                colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("apply_calibration_button")
+            ) {
+                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Apply calibration", fontWeight = FontWeight.Bold)
+            }
+
+            if (touchSamplingOffsetMs > 0L || panelLatencyMs > 0L) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Currently applied: ${touchSamplingOffsetMs + panelLatencyMs} ms",
+                    color = TextSubtle,
+                    fontSize = 11.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalibrationRow(title: String, value: String, detail: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(CharcoalCardElevated)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+            .padding(14.dp)
+    ) {
+        Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Hardware Calibration", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                IconButton(onClick = onDismiss) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
-                }
+                Text(text = title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(text = value, color = BrandAccent, fontSize = 13.sp, fontWeight = FontWeight.Black)
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Display refresh and digitizer polling can affect millisecond timing. We measure hardware baseline for fair competitive scoring.",
-                color = TextMuted,
-                fontSize = 13.sp,
-                lineHeight = 18.sp
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Step Progress
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf("1. Device", "2. Input", "3. Sample", "4. Ready").forEachIndexed { index, label ->
-                    val isActive = step >= (index + 1)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(4.dp)
-                            .background(if (isActive) BrandAccent else BorderSubtle, RoundedCornerShape(2.dp))
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            when (step) {
-                1 -> {
-                    // Check device
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
-                            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                            .padding(16.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = SportGreen, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "120 Hz Dynamic Refresh Detected", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = "Frame timing precision: ~8.3 ms per tick. Zero frame jitter detected.", color = TextMuted, fontSize = 12.sp)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = { step = 2 },
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) {
-                        Text("Next: Input", fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
-                }
-                2 -> {
-                    // Choose input
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
-                            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                            .padding(16.dp)
-                    ) {
-                        Column {
-                            Text(text = "Digitizer Input Mode", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = "Touch screen: 240 Hz sampling rate active.\nHardware latency compensation: -6 ms.", color = TextMuted, fontSize = 12.sp)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = { step = 3 },
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) {
-                        Text("Next: Sample", fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
-                }
-                3 -> {
-                    // Run sample
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(text = "Tap target circle below (${tapSampleCount}/3)", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                                .background(BrandAccent)
-                                .clickable {
-                                    tapSampleCount++
-                                    if (tapSampleCount >= 3) {
-                                        measuredLatency = 4
-                                        step = 4
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = "TAP", color = TextInverse, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "Measuring raw touch response delay...", color = TextSubtle, fontSize = 12.sp)
-                    }
-                }
-                4 -> {
-                    // Calibration ready
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(CharcoalCardElevated, RoundedCornerShape(12.dp))
-                            .border(1.dp, SportGreen, RoundedCornerShape(12.dp))
-                            .padding(16.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = SportGreen, modifier = Modifier.size(22.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "Calibration Verified: Grade A", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(text = "Offset: +${measuredLatency}ms · Your upcoming runs qualify for verified global leaderboards.", color = TextMuted, fontSize = 13.sp)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = TextInverse),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Apply Calibration", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            if (step < 4) {
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "Skip", color = TextSubtle, fontSize = 12.sp)
-                }
-            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = detail, color = TextSubtle, fontSize = 11.sp, lineHeight = 15.sp)
         }
     }
 }

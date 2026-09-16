@@ -22,13 +22,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.BrandAccent
 import com.example.ui.theme.CharcoalCard
@@ -39,6 +38,7 @@ import com.example.ui.theme.TextPrimary
 @Composable
 fun GlobalHeader(
     hasUnreadNotifications: Boolean,
+    avatarInitials: String = "A",
     onWordmarkClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onAvatarClick: () -> Unit,
@@ -56,7 +56,7 @@ fun GlobalHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: Wordmark R/
+            // Left: app-name wordmark, taken from the app label so the two never drift apart
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -66,14 +66,11 @@ fun GlobalHeader(
                     .testTag("wordmark_home_button")
             ) {
                 Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = TextPrimary, fontWeight = FontWeight.Black, fontSize = 24.sp, fontFamily = FontFamily.SansSerif)) {
-                            append("R")
-                        }
-                        withStyle(SpanStyle(color = BrandAccent, fontWeight = FontWeight.Black, fontSize = 24.sp, fontFamily = FontFamily.SansSerif)) {
-                            append("/")
-                        }
-                    }
+                    text = stringResource(id = R.string.app_name),
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 22.sp,
+                    fontFamily = FontFamily.SansSerif
                 )
             }
 
@@ -106,7 +103,7 @@ fun GlobalHeader(
                     }
                 }
 
-                // Avatar button (Alex Morgan)
+                // Avatar button
                 Box(
                     modifier = Modifier
                         .size(38.dp)
@@ -118,7 +115,7 @@ fun GlobalHeader(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "AM",
+                        text = avatarInitials,
                         color = BrandAccent,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold

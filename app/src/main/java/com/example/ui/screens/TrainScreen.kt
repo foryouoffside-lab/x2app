@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.SessionEntity
 import com.example.model.DrillCategory
 import com.example.model.DrillInfo
 import com.example.model.DrillType
@@ -87,10 +88,17 @@ fun TrainScreen(
     onYourPlanClick: () -> Unit,
     batteries: List<SportsBattery> = emptyList(),
     onOpenBattery: (SportsBattery) -> Unit = {},
+    sessions: List<SessionEntity> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
     val filterScrollState = rememberScrollState()
+
+    val weeklyGoal = 3
+    val dayMillis = 24L * 60L * 60L * 1000L
+    val weekMillis = 7L * dayMillis
+    val sessionsThisWeek = sessions.count { System.currentTimeMillis() - it.timestamp <= weekMillis }
+    val weeklyGoalProgress = (sessionsThisWeek.toFloat() / weeklyGoal).coerceIn(0f, 1f)
 
     val filteredDrills = drills.filter { drill ->
         when (selectedFilter) {
@@ -347,18 +355,22 @@ fun TrainScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(38.dp)) {
                         CircularProgressIndicator(
-                            progress = { 2f / 3f },
+                            progress = { weeklyGoalProgress },
                             color = VisionTeal,
                             trackColor = BorderSubtle,
                             strokeWidth = 3.dp,
                             modifier = Modifier.fillMaxSize()
                         )
-                        Text(text = "2/3", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "$sessionsThisWeek/$weeklyGoal", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column {
                         Text(text = "Weekly Goal", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text(text = "02:00 left", color = TextMuted, fontSize = 12.sp)
+                        Text(
+                            text = if (sessionsThisWeek >= weeklyGoal) "Goal reached" else "${weeklyGoal - sessionsThisWeek} session${if (weeklyGoal - sessionsThisWeek == 1) "" else "s"} to go",
+                            color = TextMuted,
+                            fontSize = 12.sp
+                        )
                     }
                 }
 
@@ -375,8 +387,15 @@ fun TrainScreen(
             }
         }
 
-        // 5. Coach Combine Protocols
+        // 5. Combine protocols (multi-drill batteries)
         if (batteries.isNotEmpty()) {
+            Text(
+                text = "COMBINE PROTOCOLS",
+                color = TextMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 batteries.forEach { battery ->
                     val primaryDrill = battery.drills.firstOrNull() ?: DrillType.CLASSIC

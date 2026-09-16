@@ -41,6 +41,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import com.example.ui.theme.CoralWarning
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -56,9 +62,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.remember
 import com.example.data.SessionEntity
+import com.example.model.DrillType
 import com.example.model.PerformanceMetric
 import com.example.model.UserProfile
+import com.example.model.drillTypeFromId
+import com.example.model.isChoiceCategory
 import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.BorderActive
 import com.example.ui.theme.BorderSubtle
@@ -75,6 +85,7 @@ import com.example.ui.theme.TextSubtle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun ProgressScreen(
@@ -86,40 +97,16 @@ fun ProgressScreen(
     onBuildSession: () -> Unit,
     onViewAllRecords: () -> Unit,
     onExportCsv: () -> Unit = {},
+    onDeleteSession: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    // A run can be discarded, but never silently: deleting changes the trend.
+    var pendingDelete by remember { mutableStateOf<SessionEntity?>(null) }
 
-    val metrics = listOf(
-        PerformanceMetric(
-            name = "Speed",
-            score = 82,
-            detailValue = "Median 236 ms · Best 214 ms",
-            trendDescription = "+3.4% faster over the last 30 days.",
-            description = "Raw neuromuscular transmission latency to visual triggers. Measured in milliseconds."
-        ),
-        PerformanceMetric(
-            name = "Accuracy",
-            score = 91,
-            detailValue = "91% correct response rate",
-            trendDescription = "Zero false triggers recorded on 4 out of last 5 runs.",
-            description = "The ratio of correct inputs without anticipating triggers prematurely or selecting the wrong path."
-        ),
-        PerformanceMetric(
-            name = "Consistency",
-            score = 74,
-            detailValue = "18 ms standard deviation",
-            trendDescription = "Variability reduced from 28 ms to 18 ms.",
-            description = "Standard variance between trials. Elite competitors demonstrate sub-15ms consistency."
-        ),
-        PerformanceMetric(
-            name = "Decision",
-            score = 66,
-            detailValue = "286 ms choice latency",
-            trendDescription = "Trailing visual speed by 72 ms. High priority focus area.",
-            description = "Cognitive discrimination speed when resolving multi-choice stimulus prompts."
-        )
-    )
+    val metrics = remember(sessions) { buildPerformanceMetrics(sessions) }
+    val trendPoints = remember(sessions) { sessions.asReversed().takeLast(7).map { it.medianTimeMs.toFloat() } }
+    val weakestMetric = remember(metrics) { metrics.minBy { it.score } }
 
     Column(
         modifier = modifier
@@ -204,107 +191,118 @@ fun ProgressScreen(
                         }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "236 ms",
+                            text = trendPoints.lastOrNull()?.let { "${it.roundToInt()} ms" } ?: "--",
                             color = TextPrimary,
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Black
                         )
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50.dp))
-                            .background(SportGreen.copy(alpha = 0.15f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.TrendingDown, contentDescription = null, tint = SportGreen, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "-12 ms", color = SportGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    if (trendPoints.size >= 2) {
+                        val deltaMs = (trendPoints.first() - trendPoints.last()).roundToInt()
+                        val improving = deltaMs >= 0
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50.dp))
+                                .background((if (improving) SportGreen else AmberAlert).copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.TrendingDown,
+                                contentDescription = null,
+                                tint = if (improving) SportGreen else AmberAlert,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (improving) "-$deltaMs ms" else "+${-deltaMs} ms",
+                                color = if (improving) SportGreen else AmberAlert,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Chart Canvas
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(110.dp)
-                ) {
-                    val points = listOf(254f, 250f, 246f, 248f, 242f, 238f, 236f)
-                    val min = 230f
-                    val max = 260f
-                    val range = max - min
+                if (trendPoints.size >= 2) {
+                    // Chart Canvas
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(110.dp)
+                    ) {
+                        val points = trendPoints
+                        val min = points.min()
+                        val max = points.max()
+                        val range = (max - min).coerceAtLeast(1f)
 
-                    // Horizontal reference grid lines
-                    val stepY = size.height / 3
-                    for (i in 0..3) {
-                        val y = i * stepY
-                        drawLine(
-                            color = BorderSubtle,
-                            start = Offset(0f, y),
-                            end = Offset(size.width, y),
-                            strokeWidth = 1.dp.toPx()
+                        // Horizontal reference grid lines
+                        val stepY = size.height / 3
+                        for (i in 0..3) {
+                            val y = i * stepY
+                            drawLine(
+                                color = BorderSubtle,
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+
+                        // Trend path
+                        val path = Path()
+                        val widthStep = size.width / (points.size - 1)
+
+                        points.forEachIndexed { i, p ->
+                            val x = i * widthStep
+                            val y = ((p - min) / range) * size.height
+                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        }
+
+                        // Gradient under path
+                        val fillPath = Path().apply {
+                            addPath(path)
+                            lineTo(size.width, size.height)
+                            lineTo(0f, size.height)
+                            close()
+                        }
+                        drawPath(
+                            path = fillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(BrandAccent.copy(alpha = 0.25f), Color.Transparent)
+                            )
                         )
-                    }
 
-                    // Trend path
-                    val path = Path()
-                    val widthStep = size.width / (points.size - 1)
-
-                    points.forEachIndexed { i, p ->
-                        val x = i * widthStep
-                        val y = ((p - min) / range) * size.height
-                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                    }
-
-                    // Gradient under path
-                    val fillPath = Path().apply {
-                        addPath(path)
-                        lineTo(size.width, size.height)
-                        lineTo(0f, size.height)
-                        close()
-                    }
-                    drawPath(
-                        path = fillPath,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(BrandAccent.copy(alpha = 0.25f), Color.Transparent)
+                        drawPath(
+                            path = path,
+                            color = BrandAccent,
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                         )
+
+                        // Dots
+                        points.forEachIndexed { i, p ->
+                            val x = i * widthStep
+                            val y = ((p - min) / range) * size.height
+                            drawCircle(
+                                color = CharcoalCard,
+                                radius = 5.dp.toPx(),
+                                center = Offset(x, y)
+                            )
+                            drawCircle(
+                                color = if (i == points.size - 1) BrandAccent else CoolBlue,
+                                radius = 3.5.dp.toPx(),
+                                center = Offset(x, y)
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Complete a few sessions to see your reaction-time trend.",
+                        color = TextSubtle,
+                        fontSize = 12.sp
                     )
-
-                    drawPath(
-                        path = path,
-                        color = BrandAccent,
-                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                    )
-
-                    // Dots
-                    points.forEachIndexed { i, p ->
-                        val x = i * widthStep
-                        val y = ((p - min) / range) * size.height
-                        drawCircle(
-                            color = CharcoalCard,
-                            radius = 5.dp.toPx(),
-                            center = Offset(x, y)
-                        )
-                        drawCircle(
-                            color = if (i == points.size - 1) BrandAccent else CoolBlue,
-                            radius = 3.5.dp.toPx(),
-                            center = Offset(x, y)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    listOf("Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Today").forEach { day ->
-                        Text(text = day, color = TextSubtle, fontSize = 10.sp)
-                    }
                 }
             }
         }
@@ -404,25 +402,27 @@ fun ProgressScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Focus: Decision Speed",
+                    text = if (sessions.isEmpty()) "Complete your first session" else "Focus: ${weakestMetric.name}",
                     color = TextPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "+18% target", color = TextMuted, fontSize = 12.sp)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.AltRoute, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "Choice drills", color = BrandAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                if (sessions.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(text = "+${100 - weakestMetric.score}% target", color = TextMuted, fontSize = 12.sp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.AltRoute, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(text = recommendedDrillLabel(weakestMetric.name), color = BrandAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(14.dp))
@@ -596,6 +596,18 @@ fun ProgressScreen(
                                     Text(text = "${session.medianTimeMs} ms", color = SportGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                     Text(text = "${session.accuracyPercent}% acc", color = TextMuted, fontSize = 11.sp)
                                 }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = { pendingDelete = session },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Discard this session",
+                                        tint = TextSubtle,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -603,4 +615,157 @@ fun ProgressScreen(
             }
         }
     }
+
+    pendingDelete?.let { session ->
+        DeleteSessionDialog(
+            session = session,
+            onConfirm = {
+                onDeleteSession(session.id)
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null }
+        )
+    }
+}
+
+@Composable
+private fun DeleteSessionDialog(
+    session: SessionEntity,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = "Discard", color = CoralWarning, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Keep", color = TextMuted)
+            }
+        },
+        title = { Text(text = "Discard this run?", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+        text = {
+            Text(
+                text = "${session.drillTitle} · ${session.medianTimeMs} ms will be removed from your history, and your trend and averages will be recalculated without it. This cannot be undone.",
+                color = TextMuted,
+                fontSize = 13.sp
+            )
+        },
+        containerColor = CharcoalCard,
+        shape = RoundedCornerShape(14.dp)
+    )
+}
+
+private fun recommendedDrillLabel(metricName: String): String = when (metricName) {
+    "Decision" -> "Choice drills"
+    "Speed" -> "Visual Reflex drills"
+    "Consistency" -> "Rhythm & pacing drills"
+    "Accuracy" -> "Go/No-Go drills"
+    else -> "Reaction drills"
+}
+
+private fun scoreAgainstBenchmark(avgMedianMs: Double, benchmarkMs: Int): Int =
+    ((benchmarkMs / avgMedianMs) * 100).roundToInt().coerceIn(0, 100)
+
+internal fun buildPerformanceMetrics(sessions: List<SessionEntity>): List<PerformanceMetric> {
+    val classicSessions = sessions.filter { it.drillId == DrillType.CLASSIC.id }
+    val choiceSessions = sessions.filter { s -> drillTypeFromId(s.drillId)?.isChoiceCategory == true }
+
+    val speedMetric = if (classicSessions.isNotEmpty()) {
+        val avgMedian = classicSessions.map { it.medianTimeMs }.average()
+        val bestMs = classicSessions.minOf { s -> if (s.bestTimeMs > 0) s.bestTimeMs else s.medianTimeMs }
+        val trend = if (classicSessions.size >= 4) {
+            val half = classicSessions.size / 2
+            val recentAvg = classicSessions.take(half).map { it.medianTimeMs }.average()
+            val olderAvg = classicSessions.takeLast(classicSessions.size - half).map { it.medianTimeMs }.average()
+            val diffPct = ((olderAvg - recentAvg) / olderAvg) * 100
+            when {
+                diffPct > 0.5 -> "+${"%.1f".format(Locale.US, diffPct)}% faster over your recent sessions."
+                diffPct < -0.5 -> "${"%.1f".format(Locale.US, -diffPct)}% slower over your recent sessions."
+                else -> "Holding steady over your recent sessions."
+            }
+        } else "Complete more Visual Reflex sessions to see a trend."
+        PerformanceMetric(
+            name = "Speed",
+            score = scoreAgainstBenchmark(avgMedian, 200),
+            detailValue = "Median ${avgMedian.roundToInt()} ms · Best $bestMs ms",
+            trendDescription = trend,
+            description = "Raw neuromuscular transmission latency to visual triggers. Measured in milliseconds."
+        )
+    } else {
+        PerformanceMetric(
+            name = "Speed",
+            score = 0,
+            detailValue = "No data yet",
+            trendDescription = "Complete a Visual Reflex drill to start tracking.",
+            description = "Raw neuromuscular transmission latency to visual triggers. Measured in milliseconds."
+        )
+    }
+
+    val accuracyMetric = if (sessions.isNotEmpty()) {
+        val avgAcc = sessions.map { it.accuracyPercent }.average()
+        PerformanceMetric(
+            name = "Accuracy",
+            score = avgAcc.roundToInt().coerceIn(0, 100),
+            detailValue = "${avgAcc.roundToInt()}% correct response rate",
+            trendDescription = "Averaged across ${sessions.size} recorded session${if (sessions.size == 1) "" else "s"}.",
+            description = "The ratio of correct inputs without anticipating triggers prematurely or selecting the wrong path."
+        )
+    } else {
+        PerformanceMetric(
+            name = "Accuracy",
+            score = 0,
+            detailValue = "No data yet",
+            trendDescription = "Complete a drill to start tracking.",
+            description = "The ratio of correct inputs without anticipating triggers prematurely or selecting the wrong path."
+        )
+    }
+
+    val consistencyMetric = if (sessions.isNotEmpty()) {
+        val avgConsistency = sessions.map { it.consistencyMs }.average()
+        PerformanceMetric(
+            name = "Consistency",
+            score = (100 - avgConsistency).roundToInt().coerceIn(0, 100),
+            detailValue = "${avgConsistency.roundToInt()} ms standard deviation",
+            trendDescription = "Averaged across ${sessions.size} recorded session${if (sessions.size == 1) "" else "s"}.",
+            description = "Standard variance between trials. Elite competitors demonstrate sub-15ms consistency."
+        )
+    } else {
+        PerformanceMetric(
+            name = "Consistency",
+            score = 0,
+            detailValue = "No data yet",
+            trendDescription = "Complete a drill to start tracking.",
+            description = "Standard variance between trials. Elite competitors demonstrate sub-15ms consistency."
+        )
+    }
+
+    val decisionMetric = if (choiceSessions.isNotEmpty()) {
+        val avgMedian = choiceSessions.map { it.medianTimeMs }.average()
+        val trailing = if (classicSessions.isNotEmpty()) {
+            val visualAvg = classicSessions.map { it.medianTimeMs }.average()
+            val gap = (avgMedian - visualAvg).roundToInt()
+            if (gap > 0) "Trailing visual speed by $gap ms." else "Matching or beating visual speed."
+        } else "Complete a Visual Reflex drill to compare against choice speed."
+        PerformanceMetric(
+            name = "Decision",
+            score = scoreAgainstBenchmark(avgMedian, 260),
+            detailValue = "${avgMedian.roundToInt()} ms choice latency",
+            trendDescription = trailing,
+            description = "Cognitive discrimination speed when resolving multi-choice stimulus prompts."
+        )
+    } else {
+        PerformanceMetric(
+            name = "Decision",
+            score = 0,
+            detailValue = "No data yet",
+            trendDescription = "Complete a Choice Reaction drill to start tracking.",
+            description = "Cognitive discrimination speed when resolving multi-choice stimulus prompts."
+        )
+    }
+
+    return listOf(speedMetric, accuracyMetric, consistencyMetric, decisionMetric)
 }

@@ -14,7 +14,7 @@ interface ReactionDao {
     @Query("SELECT * FROM drill_sessions ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentSessions(limit: Int): Flow<List<SessionEntity>>
 
-    @Query("SELECT MIN(medianTimeMs) FROM drill_sessions WHERE drillId = 'classic' AND medianTimeMs > 0")
+    @Query("SELECT MIN(medianTimeMs) FROM drill_sessions WHERE drillId = 'classic' AND medianTimeMs > 0 AND mode = 'TEST'")
     suspend fun getBestClassicMs(): Long?
 
     @Query("SELECT COUNT(*) FROM drill_sessions")
@@ -22,4 +22,8 @@ interface ReactionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: SessionEntity): Long
+
+    // An interrupted or mis-tapped run would otherwise sit in the trend forever.
+    @Query("DELETE FROM drill_sessions WHERE id = :id")
+    suspend fun deleteSession(id: Long)
 }

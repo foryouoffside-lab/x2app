@@ -13,10 +13,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.model.DrillMode
 import com.example.model.DrillType
-import com.example.model.PerformanceMetric
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.CalibrationSheet
 import com.example.ui.components.CoachExportDialog
@@ -25,12 +26,11 @@ import com.example.ui.components.DrillDetailSheet
 import com.example.ui.components.GlobalHeader
 import com.example.ui.components.MetricDetailSheet
 import com.example.ui.components.NotificationsSheet
-import com.example.ui.components.PlayerSummarySheet
-import com.example.ui.components.RosterSheet
 import com.example.ui.components.ScoringWorksSheet
 import com.example.ui.components.SportsBatterySheet
 import com.example.ui.screens.ActiveDrillScreen
 import com.example.ui.screens.CompeteScreen
+import com.example.ui.screens.buildPerformanceMetrics
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.ProgressScreen
@@ -59,11 +59,18 @@ fun ReactionApp(
     val currentTab by viewModel.currentTab.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
     val sessions by viewModel.sessions.collectAsState()
+    // Trends, benchmarks and records are built only from measured Test runs; Train runs
+    // ramp difficulty mid-run, so their times are not comparable between sessions.
+    val testSessions = remember(sessions) { sessions.filter { it.mode == DrillMode.TEST.name } }
     val notifications by viewModel.notifications.collectAsState()
     val hasUnread = notifications.any { it.isUnread }
 
     val activeDrillType by viewModel.activeDrillType.collectAsState()
     val isDailyMode by viewModel.isDailyMode.collectAsState()
+    val activeDrillMode by viewModel.activeDrillMode.collectAsState()
+    val displayLatencyMs by viewModel.displayLatencyMs.collectAsState()
+    val touchSamplingOffsetMs by viewModel.touchSamplingOffsetMs.collectAsState()
+    val panelLatencyMs by viewModel.panelLatencyMs.collectAsState()
     val lastResult by viewModel.lastResult.collectAsState()
 
     val selectedDrillForSheet by viewModel.selectedDrillForSheet.collectAsState()
@@ -71,21 +78,14 @@ fun ReactionApp(
     val coachInsightText by viewModel.coachInsightContent.collectAsState()
     val isLoadingCoachInsight by viewModel.isLoadingCoachInsight.collectAsState()
     val showNotifications by viewModel.showNotificationsSheet.collectAsState()
-    val selectedPlayerSummary by viewModel.selectedPlayerSummary.collectAsState()
     val selectedMetricDetail by viewModel.selectedMetricDetail.collectAsState()
     val showCalibration by viewModel.showCalibrationFlow.collectAsState()
     val showScoringWorks by viewModel.showScoringWorksSheet.collectAsState()
 
     val trainFilter by viewModel.trainFilter.collectAsState()
-    val leaderboardTab by viewModel.leaderboardTab.collectAsState()
     val progressRange by viewModel.progressTimeRange.collectAsState()
-    val selectedDuration by viewModel.selectedDuration.collectAsState()
     val soundEnabled by viewModel.soundCuesEnabled.collectAsState()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
-
-    val showRoster by viewModel.showRosterSheet.collectAsState()
-    val activeAthlete by viewModel.activeAthlete.collectAsState()
-    val rosterList = viewModel.rosterList
 
     val showBattery by viewModel.showBatterySheet.collectAsState()
     val selectedBattery by viewModel.selectedBattery.collectAsState()
@@ -105,7 +105,9 @@ fun ReactionApp(
                 soundEnabled = soundEnabled,
                 hapticsEnabled = hapticsEnabled,
                 onExitDrill = { viewModel.exitActiveDrill() },
-                onCompleteRun = { median, best, accuracy, consistency, cv, falseStarts, ies, exTau, cnsHz, trials ->
+                mode = activeDrillMode,
+                displayLatencyMs = displayLatencyMs,
+                onCompleteRun = { median, best, accuracy, consistency, cv, falseStarts, ies, exTau, cnsHz, trials, runMode, survivedSec, levelReached ->
                     viewModel.completeDrillRun(
                         type = activeDrillType,
                         medianMs = median,
@@ -117,7 +119,10 @@ fun ReactionApp(
                         iesScore = ies,
                         exGaussianTau = exTau,
                         cnsHz = cnsHz,
-                        rawTrials = trials
+                        rawTrials = trials,
+                        mode = runMode,
+                        survivedSec = survivedSec,
+                        levelReached = levelReached
                     )
                 }
             )
@@ -144,6 +149,7 @@ fun ReactionApp(
                 topBar = {
                     GlobalHeader(
                         hasUnreadNotifications = hasUnread,
+                        avatarInitials = userProfile.name.take(1).ifBlank { "A" }.uppercase(),
                         onWordmarkClick = { viewModel.selectTab(AppTab.HOME) },
                         onNotificationsClick = { viewModel.openNotifications() },
                         onAvatarClick = { viewModel.selectTab(AppTab.PROFILE) }
@@ -165,14 +171,19 @@ fun ReactionApp(
                 ) {
                     when (currentTab) {
                         AppTab.HOME -> {
+                            val choiceSpeedMs = viewModel.averageChoiceSpeedMs()
+                            val coachHeadline = if (choiceSpeedMs != null && userProfile.fastestMs > 0) {
+                                val delta = choiceSpeedMs - userProfile.fastestMs
+                                if (delta > 0) "Choice speed trailing visual speed (+$delta ms)" else "Choice speed matching visual speed"
+                            } else ""
+                            val recommendedDuration = viewModel.coreDrills.find { it.type == DrillType.CHOICE }?.defaultDuration ?: "2 min"
                             HomeScreen(
                                 userProfile = userProfile,
-                                activeAthlete = activeAthlete,
-                                onOpenRoster = { viewModel.openRoster() },
-                                batteries = sportsBatteries,
-                                onOpenBattery = { battery -> viewModel.openBatteryDetail(battery) },
+                                sessions = testSessions,
                                 onStartSession = { type -> viewModel.startDrill(type) },
                                 onPlayChallenge = { viewModel.startDrill(DrillType.FLASH_GRID, dailyMode = true) },
+                                coachHeadline = coachHeadline,
+                                recommendedDuration = recommendedDuration,
                                 onOpenWhyCoach = { viewModel.openCoachInsight() },
                                 onNavigateToProgress = { viewModel.selectTab(AppTab.PROGRESS) }
                             )
@@ -188,22 +199,15 @@ fun ReactionApp(
                                 onContinueTraining = { viewModel.startDrill(DrillType.CLASSIC) },
                                 onYourPlanClick = { viewModel.openCoachInsight() },
                                 batteries = sportsBatteries,
-                                onOpenBattery = { battery -> viewModel.openBatteryDetail(battery) }
+                                onOpenBattery = { battery -> viewModel.openBatteryDetail(battery) },
+                                sessions = sessions
                             )
                         }
 
                         AppTab.COMPETE -> {
-                            val players = when (leaderboardTab) {
-                                "Country" -> viewModel.countryPlayers
-                                "Friends" -> viewModel.friendPlayers
-                                else -> viewModel.globalPlayers
-                            }
                             CompeteScreen(
-                                currentTab = leaderboardTab,
-                                onTabSelected = { tab -> viewModel.setLeaderboardTab(tab) },
-                                players = players,
+                                sessions = testSessions,
                                 onPlayToday = { viewModel.startDrill(DrillType.FLASH_GRID, dailyMode = true) },
-                                onPlayerClick = { player -> viewModel.openPlayerSummary(player) },
                                 onSeeRecords = { viewModel.selectTab(AppTab.PROGRESS) }
                             )
                         }
@@ -211,13 +215,17 @@ fun ReactionApp(
                         AppTab.PROGRESS -> {
                             ProgressScreen(
                                 userProfile = userProfile,
-                                sessions = sessions,
+                                sessions = testSessions,
                                 selectedRange = progressRange,
                                 onRangeSelect = { range -> viewModel.setProgressTimeRange(range) },
                                 onMetricClick = { metric -> viewModel.openMetricDetail(metric) },
                                 onBuildSession = { viewModel.startDrill(DrillType.CHOICE) },
-                                onViewAllRecords = { viewModel.openMetricDetail(PerformanceMetric("Speed", 82, "Median 236 ms", "+3.4% this month", "Simple visual reflex latency")) },
-                                onExportCsv = { viewModel.openExportDialog() }
+                                onViewAllRecords = {
+                                    val speedMetric = buildPerformanceMetrics(sessions).first { it.name == "Speed" }
+                                    viewModel.openMetricDetail(speedMetric)
+                                },
+                                onExportCsv = { viewModel.openExportDialog() },
+                                onDeleteSession = { id -> viewModel.deleteSession(id) }
                             )
                         }
 
@@ -225,7 +233,12 @@ fun ReactionApp(
                             ProfileScreen(
                                 userProfile = userProfile,
                                 onOpenCalibration = { viewModel.openCalibration() },
-                                onOpenNotifications = { viewModel.openNotifications() }
+                                onOpenNotifications = { viewModel.openNotifications() },
+                                onOpenScoringWorks = { viewModel.openScoringWorks() },
+                                soundEnabled = soundEnabled,
+                                onSoundToggle = { viewModel.setSoundCuesEnabled(it) },
+                                hapticsEnabled = hapticsEnabled,
+                                onHapticsToggle = { viewModel.setHapticsEnabled(it) }
                             )
                         }
                     }
@@ -236,11 +249,9 @@ fun ReactionApp(
             selectedDrillForSheet?.let { drill ->
                 DrillDetailSheet(
                     drill = drill,
-                    selectedDuration = selectedDuration,
-                    onDurationSelected = { viewModel.setSelectedDuration(it) },
                     soundEnabled = soundEnabled,
                     onSoundToggle = { viewModel.setSoundCuesEnabled(it) },
-                    onStartDrill = { viewModel.startDrill(drill.type) },
+                    onStartDrill = { chosenMode -> viewModel.startDrill(drill.type, mode = chosenMode) },
                     onHowScoringWorks = { viewModel.openScoringWorks() },
                     onDismiss = { viewModel.closeDrillDetail() }
                 )
@@ -262,13 +273,6 @@ fun ReactionApp(
                 )
             }
 
-            selectedPlayerSummary?.let { player ->
-                PlayerSummarySheet(
-                    player = player,
-                    onDismiss = { viewModel.closePlayerSummary() }
-                )
-            }
-
             selectedMetricDetail?.let { metric ->
                 MetricDetailSheet(
                     metric = metric,
@@ -278,6 +282,9 @@ fun ReactionApp(
 
             if (showCalibration) {
                 CalibrationSheet(
+                    touchSamplingOffsetMs = touchSamplingOffsetMs,
+                    panelLatencyMs = panelLatencyMs,
+                    onSaveCalibration = { touchMs, panelMs, hz -> viewModel.saveCalibration(touchMs, panelMs, hz) },
                     onDismiss = { viewModel.closeCalibration() }
                 )
             }
@@ -285,15 +292,6 @@ fun ReactionApp(
             if (showScoringWorks) {
                 ScoringWorksSheet(
                     onDismiss = { viewModel.closeScoringWorks() }
-                )
-            }
-
-            if (showRoster) {
-                RosterSheet(
-                    roster = rosterList,
-                    activeAthlete = activeAthlete,
-                    onSelectAthlete = { athlete -> viewModel.switchAthlete(athlete) },
-                    onDismiss = { viewModel.closeRoster() }
                 )
             }
 

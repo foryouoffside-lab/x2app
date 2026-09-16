@@ -15,10 +15,17 @@ data class SessionEntity(
     val consistencyMs: Long,
     val cvPercent: Float = 0f,
     val falseStarts: Int = 0,
-    val athleteName: String = "Alex Morgan",
-    val sportCategory: String = "Motorsport",
+    val athleteName: String = "",
+    val sportCategory: String = "",
     val isVerified: Boolean = true,
     val rawTrialsCsv: String = "",
-    val note: String = ""
+    val note: String = "",
+    // "TEST" = measured protocol, comparable across sessions and the only kind that
+    // feeds the trend. "TRAIN" = timed run; its times are not comparable, so they are
+    // stored for history but excluded from every benchmark and trend calculation.
+    val mode: String = "TEST",
+    // Train-only outcome. Zero on Test sessions.
+    val survivedSec: Int = 0,
+    val levelReached: Int = 0
 )
 

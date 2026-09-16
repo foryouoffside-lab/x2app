@@ -61,6 +61,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -75,6 +76,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -83,6 +85,15 @@ import androidx.compose.ui.unit.sp
 import com.example.model.DrillState
 import com.example.model.DrillType
 import com.example.model.TrialRecord
+import com.example.model.DrillMode
+import com.example.model.TrainingRules
+import com.example.model.supportsTrainMode
+import com.example.model.warmUpTrialsCount
+import com.example.model.catchTrialRate
+import com.example.model.responseDeadlineMs
+import com.example.model.scoredTrialsCount
+import com.example.model.totalTrialsCount
+import com.example.model.trainTuning
 import com.example.ui.components.DrillTutorialOverlay
 import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.BorderSubtle
@@ -101,6 +112,7 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSubtle
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import kotlin.math.ceil
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -110,6 +122,10 @@ fun ActiveDrillScreen(
     isDailyMode: Boolean,
     soundEnabled: Boolean,
     hapticsEnabled: Boolean,
+    mode: DrillMode = DrillMode.TEST,
+    // Systematic input/display overhead for this device, from calibration. Subtracted
+    // from every measurement by shifting the stimulus zero point forward.
+    displayLatencyMs: Long = 0L,
     onExitDrill: () -> Unit,
     onCompleteRun: (
         medianMs: Long,
@@ -121,19 +137,58 @@ fun ActiveDrillScreen(
         iesScore: Long,
         exGaussianTau: Long,
         cnsHz: Float?,
-        rawTrials: List<TrialRecord>
+        rawTrials: List<TrialRecord>,
+        mode: DrillMode,
+        survivedSec: Int,
+        levelReached: Int
     ) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val totalTrials = when (drillType) {
-        DrillType.CNS_TAP -> 1
-        DrillType.GO_NO_GO -> 6
-        else -> 5
+    val localView = LocalView.current
+    val refreshRateHz = remember { localView.display?.refreshRate?.roundToInt()?.takeIf { it > 0 } ?: 60 }
+    val totalTrials = drillType.totalTrialsCount
+
+    // Train mode: the clock is the only fail state. Difficulty keys off level, never
+    // off elapsed time - with a refillable clock a time-based ramp runs backwards.
+    val isTrain = mode == DrillMode.TRAIN && drillType.supportsTrainMode
+    val tuning = remember(drillType) { drillType.trainTuning }
+    var trainClockSec by remember { mutableFloatStateOf(TrainingRules.TOTAL_TIME_SEC) }
+    var trainHits by remember { mutableIntStateOf(0) }
+    var trainLevel by remember { mutableIntStateOf(1) }
+    var trainElapsedSec by remember { mutableIntStateOf(0) }
+
+
+    // Train scoring: a hit buys time, a mistake costs it, and level follows hits.
+    fun registerTrainOutcome(isCorrect: Boolean) {
+        if (!isTrain) return
+        if (isCorrect) {
+            trainHits++
+            trainLevel = TrainingRules.levelForHits(trainHits, tuning.hitsPerLevel)
+            trainClockSec = TrainingRules.applyHit(trainClockSec, tuning.timePerHitSec)
+        } else {
+            trainClockSec = TrainingRules.applyMistake(trainClockSec)
+        }
     }
+
 
     var currentTrial by remember { mutableIntStateOf(1) }
     var drillState by remember { mutableStateOf(DrillState.STANDBY) }
+    // Test protocol structure. Train has no warm-up or catch trials: it is a game
+    // against a clock, not a measurement.
+    val warmUpTrials = if (isTrain) 0 else drillType.warmUpTrialsCount
+    val isWarmUpTrial = !isTrain && currentTrial <= warmUpTrials
+    // Which trial indices carry no stimulus at all, decided up front so the count is exact.
+    val catchTrialIndices = remember(drillType, isTrain) {
+        if (isTrain || drillType.catchTrialRate <= 0f) emptySet()
+        else {
+            val scored = drillType.scoredTrialsCount + drillType.warmUpTrialsCount
+            val howMany = kotlin.math.ceil(scored * drillType.catchTrialRate).toInt()
+            // Never in the warm-up, and never the very first scored trial.
+            ((warmUpTrials + 2)..drillType.totalTrialsCount).shuffled().take(howMany).toSet()
+        }
+    }
+    val isCatchTrial = currentTrial in catchTrialIndices
     var isTutorialActive by remember { mutableStateOf(true) }
     var stimulusStartTime by remember { mutableLongStateOf(0L) }
     var lastFeedbackMs by remember { mutableLongStateOf(0L) }
@@ -245,10 +300,12 @@ fun ActiveDrillScreen(
         if (drillType == DrillType.CNS_TAP) {
             val totalTaps = cnsTapCount.coerceAtLeast(1)
             val freqHz = (totalTaps / 10.0f)
-            val medianMs = if (freqHz > 0) (1000f / freqHz).toLong() else 140L
-            val bestMs = (medianMs * 0.88f).toLong()
-            val consistency = kotlin.math.abs(cnsFirstHalfTaps - cnsSecondHalfTaps).toLong().coerceIn(2, 20)
-            val cv = ((consistency.toFloat() / totalTaps.toFloat()) * 100f).coerceIn(4.0f, 15.0f)
+            // Mean inter-tap interval. The tap test measures a rate, not individual
+            // reactions, so there is no separate "best" trial to report.
+            val medianMs = if (freqHz > 0) (1000f / freqHz).toLong() else 0L
+            val bestMs = medianMs
+            val consistency = kotlin.math.abs(cnsFirstHalfTaps - cnsSecondHalfTaps).toLong()
+            val cv = if (totalTaps > 0) (consistency.toFloat() / totalTaps.toFloat()) * 100f else 0f
 
             onCompleteRun(
                 medianMs,
@@ -262,33 +319,66 @@ fun ActiveDrillScreen(
                 (freqHz * 10f).roundToInt() / 10f,
                 listOf(
                     TrialRecord(1, medianMs, true, false, "10s Motor Test: $totalTaps taps ($freqHz Hz)")
-                )
+                ),
+                DrillMode.TEST,
+                0,
+                0
             )
             return
         }
 
-        val validTimes = recordedTrials.filter { it.isCorrect && !it.isFalseStart }.map { it.latencyMs }
-        val times = if (validTimes.isEmpty()) listOf(240L) else validTimes
+        // Statistics are computed from scored trials only: practice trials carry a
+        // first-trial slowing that would bias the median, and catch trials have no
+        // stimulus so they have no latency to contribute.
+        val scoredTrials = recordedTrials.filter { !it.isWarmUp && !it.isCatchTrial }
+        val validTimes = scoredTrials.filter { it.isCorrect && !it.isFalseStart }.map { it.latencyMs }
+        // A response on a catch trial is a pure false alarm - the strongest evidence of
+        // guessing the app can collect.
+        val falseAlarms = recordedTrials.count { it.isCatchTrial && !it.isCorrect }
+        // A run with no scoring trials has nothing to measure. Report zeros rather than
+        // inventing a placeholder time, so an empty run never looks like a real result.
+        val times = validTimes
         val sorted = times.sorted()
-        val median = sorted[sorted.size / 2]
-        val best = sorted.first()
-        val totalAttempts = (correctCount + errorCount).coerceAtLeast(1)
-        val accuracy = ((correctCount.toFloat() / totalAttempts.toFloat()) * 100).toInt().coerceIn(30, 100)
+        // Which estimator is right depends on how many trials there are.
+        //
+        // Test runs 5 trials. At that size the median is the right call: a trimmed mean
+        // would have to discard the fastest valid trial, and in a right-skewed reaction
+        // time distribution the fast trials are signal while the slow tail is the noise.
+        //
+        // Train produces 25-40 trials. At that size a symmetric 10% trimmed mean uses far
+        // more of the data than a single middle value while still discarding lapses at
+        // both ends, so it is both more stable and more precise than the median.
+        val median = when {
+            sorted.isEmpty() -> 0L
+            sorted.size < 12 -> sorted[sorted.size / 2]
+            else -> {
+                val cut = (sorted.size * 0.1).toInt().coerceAtLeast(1)
+                val kept = sorted.subList(cut, sorted.size - cut)
+                if (kept.isEmpty()) sorted[sorted.size / 2] else kept.average().toLong()
+            }
+        }
+        val best = sorted.firstOrNull() ?: 0L
+        val scoredCorrect = scoredTrials.count { it.isCorrect }
+        val totalAttempts = scoredTrials.size.coerceAtLeast(1)
+        val accuracy = ((scoredCorrect.toFloat() / totalAttempts.toFloat()) * 100).toInt().coerceIn(0, 100)
 
-        // Standard deviation and Coefficient of Variation (CV% = StdDev / Mean * 100)
-        val mean = times.average()
-        val variance = times.map { (it - mean) * (it - mean) }.average()
+        // Standard deviation and Coefficient of Variation (CV% = StdDev / Mean * 100),
+        // reported as measured rather than squeezed into a flattering range.
+        val mean = if (times.isEmpty()) 0.0 else times.average()
+        val variance = if (times.isEmpty()) 0.0 else times.map { (it - mean) * (it - mean) }.average()
         val stdDev = sqrt(variance)
-        val consistency = stdDev.toLong().coerceIn(6, 60)
-        val cvPercent = if (mean > 0) ((stdDev / mean) * 100f).toFloat().coerceIn(3.0f, 25.0f) else 7.5f
+        val consistency = stdDev.toLong()
+        val cvPercent = if (mean > 0) ((stdDev / mean) * 100f).toFloat() else 0f
 
         // Inverse Efficiency Score: IES = RT / (Accuracy / 100)
         val accRatio = (accuracy.toFloat() / 100f).coerceAtLeast(0.3f)
         val iesScore = (median / accRatio).toLong()
 
         // Ex-Gaussian Tau approximation: Attentional lapse tail (90th percentile - median)
-        val p90Index = (sorted.size * 0.9).toInt().coerceIn(0, sorted.size - 1)
-        val exTau = (sorted[p90Index] - median).coerceAtLeast(10L)
+        val exTau = if (sorted.isEmpty()) 0L else {
+            val p90Index = (sorted.size * 0.9).toInt().coerceIn(0, sorted.size - 1)
+            (sorted[p90Index] - median).coerceAtLeast(0L)
+        }
 
         onCompleteRun(
             median,
@@ -296,11 +386,14 @@ fun ActiveDrillScreen(
             accuracy,
             consistency,
             (cvPercent * 10f).roundToInt() / 10f,
-            falseStartsCount,
+            falseStartsCount + falseAlarms,
             iesScore,
             exTau,
             null,
-            recordedTrials.toList()
+            recordedTrials.toList(),
+            if (isTrain) DrillMode.TRAIN else DrillMode.TEST,
+            if (isTrain) trainElapsedSec else 0,
+            if (isTrain) trainLevel else 0
         )
     }
 
@@ -309,7 +402,9 @@ fun ActiveDrillScreen(
             isCnsRunning = true
             return
         }
-        if (currentTrial > totalTrials) {
+        // Test ends after a fixed number of trials so every run is comparable.
+        // Train runs until the clock is gone, however many trials that takes.
+        if (!isTrain && currentTrial > totalTrials) {
             finishRun()
             return
         }
@@ -333,7 +428,7 @@ fun ActiveDrillScreen(
             delay(Random.nextLong(800L, 2400L))
             if (drillState == DrillState.WAITING_FOR_STIMULUS) {
                 f1LitCount = 0 // LIGHTS OUT!
-                stimulusStartTime = SystemClock.uptimeMillis()
+                stimulusStartTime = 0L // set on the frame that actually presents it
                 drillState = DrillState.STIMULUS_ACTIVE
                 triggerHaptic(false)
             }
@@ -353,14 +448,54 @@ fun ActiveDrillScreen(
         }
 
         if (drillState == DrillState.WAITING_FOR_STIMULUS) {
-            // Random foreperiod delay between 1.6s and 3.9s (Standard psychometric jitter)
-            val delayMs = Random.nextLong(1600L, 3900L)
+            // Test keeps the standard 1.6-3.9s psychometric jitter: the foreperiod is part
+            // of the instrument and must not vary, or measurements stop being comparable.
+            // Train paces stimuli to the drill's action rate so the clock maths hold, and
+            // tightens the gap as level rises.
+            // Catch trial: no stimulus ever arrives. Hold for a full foreperiod plus a
+            // response window; surviving it without tapping is a correct rejection.
+            if (isCatchTrial) {
+                delay(nonAgingForeperiodMs())
+                delay(1200L)
+                if (drillState == DrillState.WAITING_FOR_STIMULUS) {
+                    correctCount++
+                    lastFeedbackMs = 0L
+                    lastFeedbackMsg = "Held - no signal"
+                    recordedTrials.add(
+                        TrialRecord(
+                            trialIndex = currentTrial,
+                            latencyMs = 0L,
+                            isCorrect = true,
+                            isFalseStart = false,
+                            stimulusInfo = "Catch trial - correctly withheld",
+                            isWarmUp = isWarmUpTrial,
+                            isCatchTrial = true
+                        )
+                    )
+                    drillState = DrillState.TRIAL_FEEDBACK
+                }
+                return@LaunchedEffect
+            }
+
+            val delayMs = if (isTrain) {
+                val baseMs = (1000f / tuning.actionsPerSec)
+                val tightened = baseMs * TrainingRules.rampUp(trainLevel, 1.0f, 0.55f)
+                val jitter = tightened * 0.35f
+                Random.nextLong(
+                    (tightened - jitter).toLong().coerceAtLeast(350L),
+                    (tightened + jitter).toLong().coerceAtLeast(600L)
+                )
+            } else {
+                nonAgingForeperiodMs()
+            }
             delay(delayMs)
             if (drillState == DrillState.WAITING_FOR_STIMULUS) {
                 when (drillType) {
                     DrillType.GO_NO_GO -> {
                         // ~65% Go, ~35% No-Go
-                        isGoStimulus = Random.nextFloat() < 0.65f
+                        // 75/25 builds a dominant Go response for the athlete to inhibit against.
+                        // At 65/35 there is no prepotency and this measures choice, not inhibition.
+                        isGoStimulus = Random.nextFloat() < 0.75f
                     }
                     DrillType.AUDITORY -> {
                         playAudioTone()
@@ -412,7 +547,7 @@ fun ActiveDrillScreen(
                     }
                     DrillType.CLASSIC, DrillType.CNS_TAP, DrillType.F1_LIGHTS, DrillType.RHYTHM_SYNC -> {}
                 }
-                stimulusStartTime = SystemClock.uptimeMillis()
+                stimulusStartTime = 0L // set on the frame that actually presents it
                 drillState = DrillState.STIMULUS_ACTIVE
                 if (drillType != DrillType.TACTILE) {
                     triggerHaptic(false)
@@ -432,9 +567,11 @@ fun ActiveDrillScreen(
                                 latencyMs = 0L,
                                 isCorrect = true,
                                 isFalseStart = false,
-                                stimulusInfo = "NO-GO (Red Octagon) - Successfully Withheld"
+                                stimulusInfo = "NO-GO (Red Octagon) - Successfully Withheld",
+                                isWarmUp = isWarmUpTrial
                             )
                         )
+                        registerTrainOutcome(true)
                         drillState = DrillState.TRIAL_FEEDBACK
                     }
                 }
@@ -457,6 +594,92 @@ fun ActiveDrillScreen(
         }
     }
 
+    // Train is played against a clock, so it advances itself; stopping for a "Next
+    // Trial" tap after every stimulus would break the pressure the mode exists to create.
+    LaunchedEffect(isTrain, drillState, currentTrial, trainHits) {
+        if (!isTrain) return@LaunchedEffect
+        if (drillState != DrillState.TRIAL_FEEDBACK &&
+            drillState != DrillState.TOO_SOON &&
+            drillState != DrillState.FALSE_START
+        ) return@LaunchedEffect
+        // Long enough to read the result, short enough not to feel like waiting.
+        delay(300L)
+        if (drillState == DrillState.TRIAL_FEEDBACK ||
+            drillState == DrillState.TOO_SOON ||
+            drillState == DrillState.FALSE_START
+        ) {
+            currentTrial++
+            startNextTrial()
+        }
+    }
+
+    // The measurement's zero point.
+    //
+    // Setting the clock when the state variable changes measures from before the athlete
+    // could possibly see anything: Compose still has to recompose and the display still
+    // has to scan the frame out, which is 1-3 frames of error on every single trial.
+    // withFrameNanos returns the vsync timestamp of the frame that actually carries the
+    // stimulus, on the same uptime base as MotionEvent times, so response - stimulus is
+    // a like-for-like subtraction. What remains after vsync is panel latency, which is
+    // what the calibration offset accounts for.
+    LaunchedEffect(drillState, currentTrial, trainHits) {
+        if (drillState != DrillState.STIMULUS_ACTIVE) return@LaunchedEffect
+        // Rhythm Sync aims at a future target time it sets itself.
+        if (drillType == DrillType.RHYTHM_SYNC || drillType == DrillType.CNS_TAP) return@LaunchedEffect
+        if (stimulusStartTime != 0L) return@LaunchedEffect
+        withFrameNanos { frameTimeNanos ->
+            stimulusStartTime = (frameTimeNanos / 1_000_000L) + displayLatencyMs
+        }
+    }
+
+    // Train difficulty ramp. The response window closes as level rises; letting it
+    // expire costs clock time exactly like a wrong answer. This is what makes levelling
+    // mean something - without it the level number would be decoration.
+    LaunchedEffect(isTrain, drillState, currentTrial, trainHits) {
+        if (drillState != DrillState.STIMULUS_ACTIVE) return@LaunchedEffect
+        // No-Go stimuli are scored by withholding, which has its own timer.
+        if (drillType == DrillType.GO_NO_GO && !isGoStimulus) return@LaunchedEffect
+        if (drillType == DrillType.RHYTHM_SYNC || drillType == DrillType.CNS_TAP) return@LaunchedEffect
+
+        // Train closes the window as level rises; Test uses a fixed, generous deadline so
+        // a lapse is scored as a miss instead of entering the median as a huge latency.
+        val windowMs = if (isTrain) {
+            tuning.windowMsForLevel(trainLevel)
+        } else {
+            drillType.responseDeadlineMs.takeIf { it > 0L } ?: return@LaunchedEffect
+        }
+        delay(windowMs)
+        if (drillState == DrillState.STIMULUS_ACTIVE) {
+            errorCount++
+            lastFeedbackMs = 0L
+            lastFeedbackMsg = "Missed window"
+            recordedTrials.add(
+                TrialRecord(
+                    trialIndex = currentTrial,
+                    latencyMs = windowMs,
+                    isCorrect = false,
+                    isFalseStart = false,
+                    stimulusInfo = if (isTrain) "Window expired at level $trainLevel" else "No response within ${windowMs}ms",
+                    isWarmUp = isWarmUpTrial
+                )
+            )
+            registerTrainOutcome(false)
+            drillState = DrillState.TRIAL_FEEDBACK
+        }
+    }
+
+    // Train clock. Drains in real time and is the only fail state; hits refill it.
+    LaunchedEffect(isTrain, isTutorialActive) {
+        if (!isTrain || isTutorialActive) return@LaunchedEffect
+        while (trainClockSec > 0f && drillState != DrillState.FINISHED) {
+            delay(100L)
+            if (drillState == DrillState.PAUSED) continue
+            trainClockSec = (trainClockSec - 0.1f).coerceAtLeast(0f)
+            trainElapsedSec = ((TrainingRules.TOTAL_TIME_SEC - trainClockSec) + trainHits * tuning.timePerHitSec).toInt()
+        }
+        if (drillState != DrillState.FINISHED) finishRun()
+    }
+
     // Auto-advance to trial 1 only after tutorial briefing is completed
     LaunchedEffect(isTutorialActive) {
         if (!isTutorialActive && drillState == DrillState.STANDBY) {
@@ -468,6 +691,7 @@ fun ActiveDrillScreen(
     fun handleEarlyTap() {
         if (drillState == DrillState.WAITING_FOR_STIMULUS) {
             errorCount++
+            registerTrainOutcome(false)
             drillState = DrillState.TOO_SOON
             triggerHaptic(true)
         }
@@ -475,6 +699,12 @@ fun ActiveDrillScreen(
 
     fun handleValidResponse(isCorrect: Boolean = true, hardwareEventTime: Long? = null, overrideLatency: Long? = null) {
         if (drillState != DrillState.STIMULUS_ACTIVE) return
+        // The stimulus frame has not been presented yet, so there is no zero point to
+        // measure from. Treat this as an early tap rather than inventing a latency.
+        if (stimulusStartTime == 0L && overrideLatency == null) {
+            handleEarlyTap()
+            return
+        }
         val now = hardwareEventTime ?: SystemClock.uptimeMillis()
         val elapsed = overrideLatency ?: (now - stimulusStartTime)
 
@@ -492,9 +722,11 @@ fun ActiveDrillScreen(
                     latencyMs = elapsed,
                     isCorrect = false,
                     isFalseStart = true,
-                    stimulusInfo = "Anticipation Violation (<100ms Olympic Standard)"
+                    stimulusInfo = "Anticipation Violation (<100ms Olympic Standard)",
+                    isWarmUp = isWarmUpTrial
                 )
             )
+            registerTrainOutcome(false)
             drillState = DrillState.FALSE_START
             return
         }
@@ -510,15 +742,20 @@ fun ActiveDrillScreen(
                     latencyMs = elapsed,
                     isCorrect = false,
                     isFalseStart = false,
-                    stimulusInfo = "NO-GO (Red Octagon) - Failed to Inhibit"
+                    stimulusInfo = "NO-GO (Red Octagon) - Failed to Inhibit",
+                    isWarmUp = isWarmUpTrial
                 )
             )
+            registerTrainOutcome(false)
             drillState = DrillState.TRIAL_FEEDBACK
             return
         }
 
         lastFeedbackMs = elapsed
-        lastFeedbackMsg = "$elapsed ms"
+        // A response to the wrong target is an error and has to read as one. It was
+        // already being scored as incorrect, but showing the bare time made a miss
+        // look identical to a hit.
+        lastFeedbackMsg = if (isCorrect) "$elapsed ms" else "Wrong choice · $elapsed ms"
         if (isCorrect) correctCount++ else errorCount++
 
         val stimInfo = when (drillType) {
@@ -536,10 +773,12 @@ fun ActiveDrillScreen(
                 latencyMs = elapsed,
                 isCorrect = isCorrect,
                 isFalseStart = false,
-                stimulusInfo = stimInfo
+                stimulusInfo = stimInfo,
+                isWarmUp = isWarmUpTrial
             )
         )
 
+        registerTrainOutcome(isCorrect)
         drillState = DrillState.TRIAL_FEEDBACK
     }
 
@@ -599,7 +838,13 @@ fun ActiveDrillScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "120Hz Hardware Calibrated",
+                            // Never assert a refresh rate: read the real one, and say
+                            // plainly whether a timing calibration is actually applied.
+                            text = if (displayLatencyMs > 0L) {
+                                "$refreshRateHz Hz · ${displayLatencyMs}ms calibrated"
+                            } else {
+                                "$refreshRateHz Hz · uncalibrated"
+                            },
                             color = TextSubtle,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
@@ -648,22 +893,39 @@ fun ActiveDrillScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
+                            Icon(
+                                imageVector = Icons.Default.Timer,
+                                contentDescription = null,
+                                // The clock turns amber once it is short enough to lose on.
+                                tint = if (isTrain && trainClockSec <= 10f) AmberAlert else TextMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Trial $currentTrial / $totalTrials",
-                                color = TextMuted,
+                                text = when {
+                                    isTrain -> "${ceil(trainClockSec).toInt()}s  ·  LVL $trainLevel"
+                                    // Say so plainly: an athlete who thinks practice counts
+                                    // will tighten up and skew their own first trials.
+                                    isWarmUpTrial -> "Warm-up $currentTrial / $warmUpTrials · not scored"
+                                    else -> "Trial ${currentTrial - warmUpTrials} / ${drillType.scoredTrialsCount}"
+                                },
+                                color = if (isTrain && trainClockSec <= 10f) AmberAlert else TextMuted,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                         if (lastFeedbackMs > 0 || lastFeedbackMsg.isNotEmpty()) {
+                            // One shared predicate, so a new failure message can never be
+                            // styled as a success in one place and a failure in another.
+                            val feedbackColor = if (isFailureFeedback(lastFeedbackMsg)) CoralWarning else SportGreen
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = SportGreen, modifier = Modifier.size(14.dp))
+                                Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = feedbackColor, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = lastFeedbackMsg.ifEmpty { "$lastFeedbackMs ms" },
-                                    color = SportGreen,
+                                    // Glyph as well as colour: the outcome must be legible
+                                    // to an athlete with red-green colour blindness.
+                                    text = outcomeGlyph(lastFeedbackMsg) + " " + lastFeedbackMsg.ifEmpty { "$lastFeedbackMs ms" },
+                                    color = feedbackColor,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -673,8 +935,25 @@ fun ActiveDrillScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Segmented progress indicator
-                    Row(
+                    // Train shows the clock draining; Test shows fixed trial segments.
+                    if (isTrain) {
+                        val clockFraction = (trainClockSec / TrainingRules.TOTAL_TIME_SEC).coerceIn(0f, 1f)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(BorderSubtle)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(clockFraction)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (trainClockSec <= 10f) AmberAlert else BrandAccent)
+                            )
+                        }
+                    } else Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -872,4 +1151,23 @@ fun ActiveDrillScreen(
             shape = RoundedCornerShape(14.dp)
         )
     }
+}
+
+/**
+ * A foreperiod whose hazard rate does not rise as you wait.
+ *
+ * A uniform delay is predictable: the longer nothing has happened, the sooner it must,
+ * so athletes learn to time the late trials and anticipation contaminates the measurement.
+ * An exponential (non-aging) distribution has constant hazard - having waited two seconds
+ * tells you nothing about the next instant - which is why it is the standard choice for
+ * reaction-time protocols. Truncated so a trial cannot run absurdly long.
+ */
+private fun nonAgingForeperiodMs(
+    minMs: Long = 1200L,
+    meanMs: Long = 1400L,
+    maxMs: Long = 5000L
+): Long {
+    val u = Random.nextDouble().coerceIn(1e-9, 1.0)
+    val exponential = (-kotlin.math.ln(u) * meanMs).toLong()
+    return (minMs + exponential).coerceAtMost(maxMs)
 }

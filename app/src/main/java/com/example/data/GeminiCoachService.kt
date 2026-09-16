@@ -23,7 +23,7 @@ object GeminiCoachService {
     ): String = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext "Your simple visual reflex is $visualSpeedMs ms, while your 2-choice decision reflex is $choiceSpeedMs ms (a +${choiceSpeedMs - visualSpeedMs} ms delta). In athletic and gaming neuroscience, simple sensory conduction is near-instant, but the cerebral cortex introduces cognitive latency during motor selection. Targeted 8-minute adaptive decision drills train motor cortex inhibition, directly closing this gap."
+            return@withContext "Your simple visual reflex is $visualSpeedMs ms, while your 2-choice decision reflex is $choiceSpeedMs ms (a +${choiceSpeedMs - visualSpeedMs} ms delta). In athletic and gaming neuroscience, simple sensory conduction is near-instant, but the cerebral cortex introduces cognitive latency during motor selection. Choice-reaction drills train motor cortex inhibition, which is what closes this gap."
         }
 
         val prompt = "You are an elite sports neuro-performance coach for 'Reaction'. The user has a visual simple reaction time of $visualSpeedMs ms and a 2-choice reaction time of $choiceSpeedMs ms. In 2 concise paragraphs, explain why choice speed trails visual speed neurologically and give 2 specific neuromuscular tips to improve choice latency. Keep the tone sharp, clinical, and encouraging."
@@ -64,7 +64,7 @@ object GeminiCoachService {
             // Graceful fallback to expert sports science response
         }
 
-        "Your simple visual reflex is $visualSpeedMs ms, while your 2-choice decision reflex is $choiceSpeedMs ms (a +${choiceSpeedMs - visualSpeedMs} ms delta). In athletic and gaming neuroscience, simple sensory conduction is near-instant, but the cerebral cortex introduces cognitive latency during motor selection. Targeted 8-minute adaptive decision drills train motor cortex inhibition, directly closing this gap."
+        "Your simple visual reflex is $visualSpeedMs ms, while your 2-choice decision reflex is $choiceSpeedMs ms (a +${choiceSpeedMs - visualSpeedMs} ms delta). In athletic and gaming neuroscience, simple sensory conduction is near-instant, but the cerebral cortex introduces cognitive latency during motor selection. Choice-reaction drills train motor cortex inhibition, which is what closes this gap."
     }
 
     suspend fun analyzeDrillRun(
@@ -75,10 +75,15 @@ object GeminiCoachService {
     ): String = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+            // Offline fallback: describe what was actually measured. Never rank the run
+            // against a population or claim a standard this app cannot check.
             return@withContext when {
-                accuracyPercent >= 95 && consistencyMs <= 20 -> "Exceptional neuromuscular stability with top-tier consistency (${consistencyMs}ms variance). You're ready to ramp drill pace."
-                accuracyPercent < 90 -> "High motor speed detected, but false inputs indicate trigger anticipation. Focus on visual confirmation before finger trigger release."
-                else -> "Solid kinetic rhythm. Your median of ${medianMs}ms sits within the competitive range. Continue 8-minute sets to build endurance."
+                accuracyPercent >= 95 && consistencyMs <= 20 ->
+                    "Median ${medianMs}ms at ${accuracyPercent}% accuracy, with only ${consistencyMs}ms variance between trials. Your timing held steady across the set."
+                accuracyPercent < 90 ->
+                    "Median ${medianMs}ms, but accuracy dropped to ${accuracyPercent}%. That usually means responding before the stimulus is confirmed - wait for the cue."
+                else ->
+                    "Median ${medianMs}ms at ${accuracyPercent}% accuracy, ${consistencyMs}ms variance between trials. Run it again to see whether that holds."
             }
         }
 
@@ -116,6 +121,6 @@ object GeminiCoachService {
             // Fallback
         }
 
-        "Solid kinetic rhythm. Your median of ${medianMs}ms sits within the competitive range. Train decision speed next."
+        "Median ${medianMs}ms at ${accuracyPercent}% accuracy, ${consistencyMs}ms variance between trials."
     }
 }

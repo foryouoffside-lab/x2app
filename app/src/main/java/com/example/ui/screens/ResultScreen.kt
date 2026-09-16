@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.DrillMode
 import com.example.model.DrillRunResult
 import com.example.model.DrillType
 import com.example.ui.theme.AmberAlert
@@ -129,10 +131,6 @@ fun ResultScreen(
                 Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(13.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(text = result.athleteName, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = SportGreen, modifier = Modifier.size(12.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "Verified", color = SportGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -165,6 +163,27 @@ fun ResultScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                } else if (result.mode == DrillMode.TRAIN) {
+                    // A Train run ramps difficulty as it goes, so its median is not a
+                    // measurement and must not headline the card. How long you lasted
+                    // and how far you climbed are the real result.
+                    Text(
+                        text = "LVL ${result.levelReached}",
+                        color = BrandAccent,
+                        fontSize = 54.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = (-1).sp
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Speed, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${result.survivedSec}s survived · ${result.rawTrials.size} trials",
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 } else {
                     Text(
                         text = "${result.medianTimeMs} ms",
@@ -183,6 +202,15 @@ fun ResultScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                }
+
+                if (result.mode == DrillMode.TRAIN) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Training run - not counted toward your benchmark.",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -214,18 +242,6 @@ fun ResultScreen(
                         }
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50.dp))
-                            .background(CharcoalCardElevated)
-                            .border(1.dp, BorderSubtle, RoundedCornerShape(50.dp))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = CoolBlue, modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Verified", color = CoolBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
                 }
             }
         }
@@ -337,7 +353,7 @@ fun ResultScreen(
                 ) {
                     Text(text = "TRIALS", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Text(
-                        text = if (result.rawTrials.isNotEmpty()) "${result.rawTrials.size}" else "5",
+                        text = if (result.rawTrials.isNotEmpty()) "${result.rawTrials.size}" else "--",
                         color = TextSubtle,
                         fontSize = 11.sp
                     )
@@ -345,7 +361,11 @@ fun ResultScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                if (result.rawTrials.isNotEmpty()) {
+                if (result.rawTrials.size > 10) {
+                    // A long run would bury the card under dozens of rows. Show the shape
+                    // of the run instead: every trial as a bar, plus the counts that matter.
+                    TrialShapeSummary(result)
+                } else if (result.rawTrials.isNotEmpty()) {
                     result.rawTrials.forEach { trial ->
                         Row(
                             modifier = Modifier
@@ -388,56 +408,13 @@ fun ResultScreen(
                         }
                     }
                 } else {
-                    // Fallback visual bars
-                    val trials = listOf(
-                        result.bestTimeMs,
-                        result.medianTimeMs - 8,
-                        result.medianTimeMs,
-                        result.medianTimeMs + 12,
-                        result.medianTimeMs + 22
+                    // Per-trial data wasn't recorded for this run; don't fabricate individual trials.
+                    Text(
+                        text = "Per-trial breakdown wasn't recorded for this run. Median: ${result.medianTimeMs} ms · Best: ${result.bestTimeMs} ms.",
+                        color = TextSubtle,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
                     )
-                    val maxVal = trials.maxOrNull()?.coerceAtLeast(300L) ?: 300L
-
-                    trials.forEachIndexed { idx, ms ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "T${idx + 1}",
-                                color = TextMuted,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.width(28.dp)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(CharcoalCardElevated)
-                            ) {
-                                val fraction = (ms.toFloat() / maxVal.toFloat()).coerceIn(0.1f, 1f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(fraction)
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(if (idx == 0) BrandAccent else CoolBlue.copy(alpha = 0.6f))
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "$ms ms",
-                                color = if (idx == 0) BrandAccent else TextPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.width(52.dp)
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -516,5 +493,94 @@ fun ResultScreen(
                 Text(text = "View Analytics", color = CoolBlue, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
         }
+    }
+}
+
+
+/**
+ * Compact view of a long run.
+ *
+ * Each valid trial is one bar, so the eye reads the run's shape - steady, drifting, or
+ * falling apart - without scrolling past forty rows. "Fade" compares the first third of
+ * the run with the last third: on a Train run the difficulty is climbing throughout, so
+ * slowing down late is expected and only a large gap is worth acting on.
+ */
+@Composable
+private fun TrialShapeSummary(result: DrillRunResult) {
+    val trials = result.rawTrials
+    val valid = trials.filter { it.isCorrect && !it.isFalseStart && it.latencyMs > 0 }
+    val errors = trials.count { !it.isCorrect && !it.isFalseStart }
+    val anticipations = trials.count { it.isFalseStart }
+
+    val slowest = (valid.maxOfOrNull { it.latencyMs } ?: 1L).coerceAtLeast(1L)
+    val fastest = valid.minOfOrNull { it.latencyMs } ?: 0L
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            trials.forEach { trial ->
+                val isMiss = !trial.isCorrect || trial.isFalseStart
+                // Faster is better, so a quick trial draws a taller bar.
+                val ratio = if (isMiss || trial.latencyMs <= 0) 1f
+                else (trial.latencyMs.toFloat() / slowest.toFloat()).coerceIn(0.12f, 1f)
+                val heightFraction = if (isMiss) 1f else (1.12f - ratio).coerceIn(0.15f, 1f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(heightFraction)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(
+                            when {
+                                trial.isFalseStart -> AmberAlert
+                                !trial.isCorrect -> CoralWarning
+                                else -> BrandAccent
+                            }
+                        )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            TrialStat("HITS", "${valid.size}", BrandAccent)
+            TrialStat("MISSED", "$errors", if (errors > 0) CoralWarning else TextMuted)
+            TrialStat("EARLY", "$anticipations", if (anticipations > 0) AmberAlert else TextMuted)
+            TrialStat("FASTEST", if (fastest > 0) "$fastest ms" else "--", TextPrimary)
+        }
+
+        if (valid.size >= 6) {
+            val third = valid.size / 3
+            val early = valid.take(third).map { it.latencyMs }.average()
+            val late = valid.takeLast(third).map { it.latencyMs }.average()
+            val fade = (late - early).toInt()
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = when {
+                    fade > 40 -> "Fade: $fade ms slower by the end of the run."
+                    fade < -40 -> "Warm-up: ${-fade} ms faster by the end of the run."
+                    else -> "Held pace across the run (${if (fade >= 0) "+" else ""}$fade ms)."
+                },
+                color = TextSubtle,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrialStat(label: String, value: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = label, color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(text = value, color = color, fontSize = 15.sp, fontWeight = FontWeight.Black)
     }
 }

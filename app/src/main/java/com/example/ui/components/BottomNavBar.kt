@@ -58,7 +58,7 @@ fun BottomNavBar(
     val items = listOf(
         NavItem(AppTab.HOME, "Home", Icons.Filled.Visibility, Icons.Outlined.Visibility),
         NavItem(AppTab.TRAIN, "Train", Icons.Filled.FitnessCenter, Icons.Outlined.FitnessCenter),
-        NavItem(AppTab.COMPETE, "Compete", Icons.Filled.EmojiEvents, Icons.Outlined.EmojiEvents),
+        NavItem(AppTab.COMPETE, "Challenge", Icons.Filled.EmojiEvents, Icons.Outlined.EmojiEvents),
         NavItem(AppTab.PROGRESS, "Progress", Icons.AutoMirrored.Filled.ShowChart, Icons.AutoMirrored.Outlined.ShowChart),
         NavItem(AppTab.PROFILE, "Profile", Icons.Filled.Person, Icons.Outlined.Person)
     )
